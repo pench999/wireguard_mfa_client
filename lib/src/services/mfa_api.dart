@@ -32,9 +32,17 @@ class MfaApi {
         response.statusCode,
       );
     }
+    final browserUri = Uri.parse(data['browser_url'] as String);
+    final browserUrl = serverUri.resolveUri(
+      Uri(
+        path: browserUri.path,
+        query: browserUri.hasQuery ? browserUri.query : null,
+        fragment: browserUri.hasFragment ? browserUri.fragment : null,
+      ),
+    );
     return MfaSession(
       id: data['session_id'] as String,
-      browserUrl: Uri.parse(data['browser_url'] as String),
+      browserUrl: browserUrl,
       pollToken: data['poll_token'] as String,
       expiresAt: DateTime.parse(data['expires_at'] as String),
     );

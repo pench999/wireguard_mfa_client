@@ -24,6 +24,33 @@ void main() {
 
     expect(session.id, 'session-1');
     expect(session.pollToken, 'poll-secret');
+    expect(
+      session.browserUrl,
+      Uri.parse('https://vpn.example.com/client/connect/token/'),
+    );
+    api.close();
+  });
+
+  test('pins browser URL to the configured HTTPS server', () async {
+    final api = MfaApi(
+      client: MockClient((request) async {
+        return http.Response(
+          '{"session_id":"session-1","browser_url":"http://internal-proxy/client/connect/token/?next=%2Fvpn%2F","poll_token":"poll-secret","expires_at":"2026-09-17T03:00:00Z"}',
+          201,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }),
+    );
+
+    final session = await api.createSession(
+      Uri.parse('https://vpn.example.com'),
+      '123e4567-e89b-12d3-a456-426614174000',
+    );
+
+    expect(session.browserUrl.scheme, 'https');
+    expect(session.browserUrl.host, 'vpn.example.com');
+    expect(session.browserUrl.path, '/client/connect/token/');
+    expect(session.browserUrl.query, 'next=%2Fvpn%2F');
     api.close();
   });
 
