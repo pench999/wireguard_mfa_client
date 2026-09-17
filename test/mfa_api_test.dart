@@ -1,14 +1,27 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:wireguard_mfa_client/src/models/mfa_session.dart';
+import 'package:wireguard_mfa_client/src/models/device_identity.dart';
 import 'package:wireguard_mfa_client/src/services/mfa_api.dart';
 
 void main() {
+  const device = DeviceIdentity(
+    id: '123e4567-e89b-42d3-a456-426614174111',
+    token: 'device-token-abcdefghijklmnopqrstuvwxyz123456',
+    name: 'TEST-PC',
+  );
+
   test('creates a client session', () async {
     final api = MfaApi(
       client: MockClient((request) async {
         expect(request.url.path, '/api/client/v1/sessions/');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['device_id'], device.id);
+        expect(body['device_token'], device.token);
+        expect(body['device_name'], device.name);
         return http.Response(
           '{"session_id":"session-1","browser_url":"https://vpn.example.com/client/connect/token/","poll_token":"poll-secret","expires_at":"2026-09-17T03:00:00Z"}',
           201,
@@ -20,6 +33,7 @@ void main() {
     final session = await api.createSession(
       Uri.parse('https://vpn.example.com'),
       '123e4567-e89b-12d3-a456-426614174000',
+      device,
     );
 
     expect(session.id, 'session-1');
@@ -45,6 +59,7 @@ void main() {
     final session = await api.createSession(
       Uri.parse('https://vpn.example.com'),
       '123e4567-e89b-12d3-a456-426614174000',
+      device,
     );
 
     expect(session.browserUrl.scheme, 'https');

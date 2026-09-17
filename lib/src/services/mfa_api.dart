@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/mfa_session.dart';
+import '../models/device_identity.dart';
 
 class MfaApiException implements Exception {
   const MfaApiException(this.code, [this.statusCode]);
@@ -17,12 +18,21 @@ class MfaApi {
 
   final http.Client _client;
 
-  Future<MfaSession> createSession(Uri serverUri, String peerUuid) async {
+  Future<MfaSession> createSession(
+    Uri serverUri,
+    String peerUuid,
+    DeviceIdentity device,
+  ) async {
     final response = await _client
         .post(
           serverUri.resolve('/api/client/v1/sessions/'),
           headers: const {'Content-Type': 'application/json'},
-          body: jsonEncode({'peer_uuid': peerUuid}),
+          body: jsonEncode({
+            'peer_uuid': peerUuid,
+            'device_id': device.id,
+            'device_token': device.token,
+            'device_name': device.name,
+          }),
         )
         .timeout(const Duration(seconds: 12));
     final data = _decode(response);

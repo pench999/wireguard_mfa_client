@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../controllers/vpn_controller.dart';
 import '../models/app_settings.dart';
 import '../services/mfa_api.dart';
+import '../services/device_identity_repository.dart';
 import '../services/settings_repository.dart';
 import '../services/tunnel_controller.dart';
 import 'mfa_auth_dialog.dart';
@@ -30,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _controller = VpnController(
       api: MfaApi(),
       tunnel: createTunnelController(),
+      deviceIdentityRepository: SecureDeviceIdentityRepository(),
       browserLauncher: _openAuthentication,
     )..addListener(_refresh);
     _load();

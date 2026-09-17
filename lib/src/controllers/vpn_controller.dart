@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/app_settings.dart';
 import '../models/mfa_session.dart';
 import '../services/mfa_api.dart';
+import '../services/device_identity_repository.dart';
 import '../services/tunnel_controller.dart';
 
 enum ConnectionPhase {
@@ -24,15 +25,18 @@ class VpnController extends ChangeNotifier {
   VpnController({
     required MfaApi api,
     required TunnelController tunnel,
+    required DeviceIdentityRepository deviceIdentityRepository,
     BrowserLauncher? browserLauncher,
   }) : _api = api, // ignore: prefer_initializing_formals
        _tunnel = tunnel, // ignore: prefer_initializing_formals
+       _deviceIdentityRepository = deviceIdentityRepository, // ignore: prefer_initializing_formals
        _browserLauncher =
            browserLauncher ??
            ((uri) => launchUrl(uri, mode: LaunchMode.externalApplication));
 
   final MfaApi _api;
   final TunnelController _tunnel;
+  final DeviceIdentityRepository _deviceIdentityRepository;
   final BrowserLauncher _browserLauncher;
 
   ConnectionPhase phase = ConnectionPhase.idle;
@@ -90,7 +94,12 @@ class VpnController extends ChangeNotifier {
       message = 'MFA認証を開始しています';
       notifyListeners();
       final serverUri = Uri.parse(settings.serverUrl.trim());
-      _session = await _api.createSession(serverUri, settings.peerUuid.trim());
+      final device = await _deviceIdentityRepository.loadOrCreate();
+      _session = await _api.createSession(
+        serverUri,
+        settings.peerUuid.trim(),
+        device,
+      );
       if (!await _browserLauncher(_session!.browserUrl)) {
         throw const MfaApiException('browser_launch_failed');
       }
@@ -203,6 +212,10 @@ class VpnController extends ChangeNotifier {
     'wireguard_reload_failed' ||
     'peer_unlock_failed' => 'MFAは成功しましたが、サーバーでWireGuardを有効化できませんでした。',
     'unauthorized' => '認証セッションを確認できませんでした。',
+    'invalid_device' => '端末情報を作成できませんでした。アプリを再起動してください。',
+    'device_required' => 'このユーザーは登録済み端末からのみ接続できます。',
+    'device_unauthorized' => 'この端末の登録情報を確認できません。管理者に再登録を依頼してください。',
+    'device_revoked' => 'この端末は管理者によって失効されています。',
     _ => 'MFAサーバーとの処理に失敗しました。',
   };
 
