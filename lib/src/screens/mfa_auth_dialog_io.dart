@@ -131,85 +131,88 @@ class _MfaAuthDialogState extends State<_MfaAuthDialog> {
   Widget build(BuildContext context) {
     final controller = _controller;
     return Dialog(
-      insetPadding: const EdgeInsets.all(24),
+      insetPadding: const EdgeInsets.all(16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: SizedBox(
-        width: 920,
-        height: 680,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 12, 8, 12),
-              child: Row(
-                children: [
-                  const Icon(Icons.lock_outline, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      widget.authenticationUrl.host,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+      child: FractionallySizedBox(
+        widthFactor: 0.96,
+        heightFactor: 0.94,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680, maxHeight: 510),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 12, 8, 12),
+                child: Row(
+                  children: [
+                    const Icon(Icons.lock_outline, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.authenticationUrl.host,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ),
-                  ),
-                  TextButton.icon(
-                    onPressed: _openExternalBrowser,
-                    icon: const Icon(Icons.open_in_browser, size: 18),
-                    label: const Text('外部ブラウザ'),
-                  ),
-                  IconButton(
-                    onPressed: () =>
-                        Navigator.of(context)
-                            .pop(MfaAuthDialogResult.cancelled),
-                    tooltip: '認証をキャンセル',
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
+                    TextButton.icon(
+                      onPressed: _openExternalBrowser,
+                      icon: const Icon(Icons.open_in_browser, size: 18),
+                      label: const Text('外部ブラウザ'),
+                    ),
+                    IconButton(
+                      onPressed: () =>
+                          Navigator.of(context)
+                              .pop(MfaAuthDialogResult.cancelled),
+                      tooltip: '認証をキャンセル',
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: Stack(
-                children: [
-                  if (controller != null && controller.value.isInitialized)
-                    Webview(
-                      controller,
-                      permissionRequested: (_, _, _) async =>
-                          WebviewPermissionDecision.deny,
-                    )
-                  else if (_error == null)
-                    const Center(child: CircularProgressIndicator()),
-                  if (_error != null)
-                    Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 460),
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.error_outline, size: 38),
-                              const SizedBox(height: 12),
-                              Text(_error!, textAlign: TextAlign.center),
-                              const SizedBox(height: 18),
-                              FilledButton.icon(
-                                onPressed: _openExternalBrowser,
-                                icon: const Icon(Icons.open_in_browser),
-                                label: const Text('外部ブラウザで続ける'),
-                              ),
-                            ],
+              const Divider(height: 1),
+              Expanded(
+                child: Stack(
+                  children: [
+                    if (controller != null && controller.value.isInitialized)
+                      Webview(
+                        controller,
+                        permissionRequested: (_, _, _) async =>
+                            WebviewPermissionDecision.deny,
+                      )
+                    else if (_error == null)
+                      const Center(child: CircularProgressIndicator()),
+                    if (_error != null)
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 460),
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.error_outline, size: 38),
+                                const SizedBox(height: 12),
+                                Text(_error!, textAlign: TextAlign.center),
+                                const SizedBox(height: 18),
+                                FilledButton.icon(
+                                  onPressed: _openExternalBrowser,
+                                  icon: const Icon(Icons.open_in_browser),
+                                  label: const Text('外部ブラウザで続ける'),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  if (_loading && _error == null)
-                    const Align(
-                      alignment: Alignment.topCenter,
-                      child: LinearProgressIndicator(minHeight: 2),
-                    ),
-                ],
+                    if (_loading && _error == null)
+                      const Align(
+                        alignment: Alignment.topCenter,
+                        child: LinearProgressIndicator(minHeight: 2),
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
