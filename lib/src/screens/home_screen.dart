@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../controllers/vpn_controller.dart';
@@ -5,6 +7,7 @@ import '../models/app_settings.dart';
 import '../services/mfa_api.dart';
 import '../services/settings_repository.dart';
 import '../services/tunnel_controller.dart';
+import 'mfa_auth_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,12 +21,17 @@ class _HomeScreenState extends State<HomeScreen> {
   late final VpnController _controller;
   AppSettings _settings = AppSettings.empty;
   bool _loading = true;
+  bool _authDialogOpen = false;
+  bool _closingAuthDialog = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = VpnController(api: MfaApi(), tunnel: createTunnelController())
-      ..addListener(_refresh);
+    _controller = VpnController(
+      api: MfaApi(),
+      tunnel: createTunnelController(),
+      browserLauncher: _openAuthentication,
+    )..addListener(_refresh);
     _load();
   }
 
@@ -39,7 +47,34 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _refresh() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    if (_authDialogOpen &&
+        !_closingAuthDialog &&
+        _controller.phase != ConnectionPhase.waitingForMfa) {
+      _closingAuthDialog = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _authDialogOpen) {
+          Navigator.of(context).pop(MfaAuthDialogResult.completed);
+        }
+      });
+    }
+  }
+
+  Future<bool> _openAuthentication(Uri authenticationUrl) async {
+    if (!mounted || _authDialogOpen) return mounted;
+    _authDialogOpen = true;
+    _closingAuthDialog = false;
+    unawaited(
+      showMfaAuthDialog(context, authenticationUrl).then((result) {
+        _authDialogOpen = false;
+        _closingAuthDialog = false;
+        if (result == MfaAuthDialogResult.cancelled) {
+          _controller.cancelAuthentication();
+        }
+      }),
+    );
+    return true;
   }
 
   @override
