@@ -13,7 +13,7 @@ function Assert-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        throw 'トンネルの登録には管理者権限が必要です。'
+        throw 'Administrator privileges are required to configure the tunnel.'
     }
 }
 
@@ -24,7 +24,7 @@ function Get-WireGuardExecutable {
     ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) }
 
     if (-not $candidates) {
-        throw 'WireGuard for Windowsが見つかりません。先に公式WireGuardをインストールしてください。'
+        throw 'WireGuard for Windows was not found. Install WireGuard first.'
     }
     return $candidates[0]
 }
@@ -40,12 +40,12 @@ function Grant-TunnelServiceControl {
     )
     $sddlOutput = & "$env:SystemRoot\System32\sc.exe" sdshow $ServiceName 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw "サービスのアクセス権を取得できません: $($sddlOutput -join ' ')"
+        throw "Unable to read the service security descriptor: $($sddlOutput -join ' ')"
     }
 
     $sddl = ($sddlOutput | Where-Object { $_ -match '^[OGDS]:' } | Select-Object -First 1).Trim()
     if (-not $sddl) {
-        throw 'サービスのセキュリティ記述子を解析できません。'
+        throw 'Unable to parse the service security descriptor.'
     }
 
     $descriptor = [Security.AccessControl.RawSecurityDescriptor]::new($sddl)
@@ -68,7 +68,7 @@ function Grant-TunnelServiceControl {
     $updatedSddl = $descriptor.GetSddlForm([Security.AccessControl.AccessControlSections]::All)
     $result = & "$env:SystemRoot\System32\sc.exe" sdset $ServiceName $updatedSddl 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw "サービスのアクセス権を設定できません: $($result -join ' ')"
+        throw "Unable to update the service security descriptor: $($result -join ' ')"
     }
 }
 
@@ -76,12 +76,12 @@ Assert-Administrator
 
 $resolvedConfig = (Resolve-Path -LiteralPath $ConfigPath).Path
 if ([IO.Path]::GetExtension($resolvedConfig) -ine '.conf') {
-    throw 'WireGuard設定ファイル（.conf）を指定してください。'
+    throw 'Select a WireGuard configuration file with the .conf extension.'
 }
 
 $tunnelName = [IO.Path]::GetFileNameWithoutExtension($resolvedConfig)
 if ($tunnelName -notmatch '^[A-Za-z0-9_.=+-]{1,64}$') {
-    throw '設定ファイル名には英数字と _ . = + - のみ使用できます。'
+    throw 'The configuration filename contains unsupported characters.'
 }
 
 $wireGuard = Get-WireGuardExecutable
@@ -90,7 +90,7 @@ $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 if (-not $service) {
     $installOutput = & $wireGuard /installtunnelservice $resolvedConfig 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw "WireGuardトンネルサービスを登録できません: $($installOutput -join ' ')"
+        throw "Unable to install the WireGuard tunnel service: $($installOutput -join ' ')"
     }
     $service = Get-Service -Name $serviceName -ErrorAction Stop
 }
@@ -98,4 +98,3 @@ if (-not $service) {
 Grant-TunnelServiceControl -ServiceName $serviceName -AccountName $TunnelUser
 Write-Output "TUNNEL_NAME=$tunnelName"
 Write-Output "SERVICE_NAME=$serviceName"
-
