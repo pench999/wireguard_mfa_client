@@ -116,8 +116,20 @@ Section "Install"
   File "configure_tunnel.ps1"
 
   DetailPrint "WireGuardトンネルを登録しています..."
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\installer\configure_tunnel.ps1" -ConfigPath "$ConfigPath" -TunnelUser "$TunnelUser"'
+  System::Call 'Kernel32::SetEnvironmentVariable(t "WGMFA_CONFIG_PATH", t "$ConfigPath") i .r1'
+  ${If} $1 = 0
+    MessageBox MB_ICONSTOP "WireGuard設定パスをセットアップ処理へ渡せませんでした。"
+    Abort
+  ${EndIf}
+  System::Call 'Kernel32::SetEnvironmentVariable(t "WGMFA_TUNNEL_USER", t "$TunnelUser") i .r1'
+  ${If} $1 = 0
+    MessageBox MB_ICONSTOP "VPN利用者をセットアップ処理へ渡せませんでした。"
+    Abort
+  ${EndIf}
+  nsExec::ExecToLog '$\"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe$\" -NoProfile -ExecutionPolicy Bypass -File $\"$INSTDIR\installer\configure_tunnel.ps1$\"'
   Pop $0
+  System::Call 'Kernel32::SetEnvironmentVariable(t "WGMFA_CONFIG_PATH", p 0)'
+  System::Call 'Kernel32::SetEnvironmentVariable(t "WGMFA_TUNNEL_USER", p 0)'
   ${If} $0 != 0
     MessageBox MB_ICONSTOP "WireGuardトンネル設定に失敗しました（終了コード: $0）。セットアップログを確認してください。"
     Abort
@@ -145,4 +157,3 @@ Section "Uninstall"
   DeleteRegKey HKLM "${UNINSTALL_KEY}"
   RMDir /r "$INSTDIR"
 SectionEnd
-

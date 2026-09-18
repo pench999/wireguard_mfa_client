@@ -1,10 +1,8 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$ConfigPath,
+    [string]$ConfigPath = $env:WGMFA_CONFIG_PATH,
 
-    [Parameter(Mandatory = $true)]
-    [string]$TunnelUser
+    [string]$TunnelUser = $env:WGMFA_TUNNEL_USER
 )
 
 $ErrorActionPreference = 'Stop'
@@ -77,6 +75,13 @@ function Grant-TunnelServiceControl {
 }
 
 Assert-Administrator
+
+if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
+    throw 'The WireGuard configuration path was not provided.'
+}
+if ([string]::IsNullOrWhiteSpace($TunnelUser)) {
+    throw 'The Windows tunnel user was not provided.'
+}
 
 $resolvedConfig = (Resolve-Path -LiteralPath $ConfigPath).Path
 if ([IO.Path]::GetExtension($resolvedConfig) -ine '.conf') {
