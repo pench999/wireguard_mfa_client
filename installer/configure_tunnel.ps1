@@ -21,14 +21,13 @@ function Get-WireGuardExecutable {
         $env:ProgramFiles,
         ${env:ProgramFiles(x86)}
     ) | Where-Object { $_ } | Select-Object -Unique
-    $candidates = @($programDirectories |
-        ForEach-Object { Join-Path $_ 'WireGuard\wireguard.exe' } |
-        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
-
-    if (-not $candidates) {
-        throw 'WireGuard for Windows was not found. Install WireGuard first.'
+    foreach ($directory in $programDirectories) {
+        $candidate = Join-Path $directory 'WireGuard\wireguard.exe'
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
     }
-    return $candidates[0]
+    throw 'WireGuard for Windows was not found. Install WireGuard first.'
 }
 
 function Grant-TunnelServiceControl {
@@ -75,6 +74,7 @@ function Grant-TunnelServiceControl {
 }
 
 Assert-Administrator
+Write-Output 'SCRIPT_VERSION=1.0.5'
 
 if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
     throw 'The WireGuard configuration path was not provided.'
@@ -94,6 +94,11 @@ if ($tunnelName -notmatch '^[A-Za-z0-9_.=+-]{1,64}$') {
 }
 
 $wireGuard = Get-WireGuardExecutable
+if (-not [IO.Path]::IsPathRooted($wireGuard) -or
+    [IO.Path]::GetFileName($wireGuard) -ine 'wireguard.exe') {
+    throw "Invalid WireGuard executable path: $wireGuard"
+}
+Write-Output "WIREGUARD_EXE=$wireGuard"
 $serviceName = 'WireGuardTunnel$' + $tunnelName
 $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 if (-not $service) {

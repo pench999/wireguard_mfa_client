@@ -110,6 +110,7 @@ FunctionEnd
 
 Section "Install"
   SetShellVarContext all
+  DetailPrint "WireGuard MFA Client installer ${APP_VERSION}"
   SetOutPath "$INSTDIR"
   File /r "..\build\windows\x64\runner\Release\*"
   SetOutPath "$INSTDIR\installer"
