@@ -21,9 +21,9 @@ function Get-WireGuardExecutable {
         $env:ProgramFiles,
         ${env:ProgramFiles(x86)}
     ) | Where-Object { $_ } | Select-Object -Unique
-    $candidates = $programDirectories |
+    $candidates = @($programDirectories |
         ForEach-Object { Join-Path $_ 'WireGuard\wireguard.exe' } |
-        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
 
     if (-not $candidates) {
         throw 'WireGuard for Windows was not found. Install WireGuard first.'
