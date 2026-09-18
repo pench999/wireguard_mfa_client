@@ -18,10 +18,14 @@ function Assert-Administrator {
 }
 
 function Get-WireGuardExecutable {
-    $candidates = @(
-        (Join-Path $env:ProgramFiles 'WireGuard\wireguard.exe'),
-        (Join-Path ${env:ProgramFiles(x86)} 'WireGuard\wireguard.exe')
-    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) }
+    $programDirectories = @(
+        $env:ProgramW6432,
+        $env:ProgramFiles,
+        ${env:ProgramFiles(x86)}
+    ) | Where-Object { $_ } | Select-Object -Unique
+    $candidates = $programDirectories |
+        ForEach-Object { Join-Path $_ 'WireGuard\wireguard.exe' } |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
 
     if (-not $candidates) {
         throw 'WireGuard for Windows was not found. Install WireGuard first.'
