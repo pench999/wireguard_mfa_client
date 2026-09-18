@@ -216,6 +216,8 @@ class VpnController extends ChangeNotifier {
     'device_required' => 'このユーザーは登録済み端末からのみ接続できます。',
     'device_unauthorized' => 'この端末の登録情報を確認できません。管理者に再登録を依頼してください。',
     'device_revoked' => 'この端末は管理者によって失効されています。',
+    'device_registration_not_allowed' =>
+      '別の端末が登録されています。管理者に再登録の許可を依頼してください。',
     _ => 'MFAサーバーとの処理に失敗しました。',
   };
 
