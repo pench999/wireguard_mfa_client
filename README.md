@@ -26,7 +26,7 @@ V1は、事前に構成されたWireGuardトンネルへ接続前MFAを追加す
 
 ## 前提
 
-サーバーには`wireguard_webadmin_ja`の`codex/windows-client-api`ブランチに含まれるクライアントセッションAPIが必要です。サーバー側でマイグレーションを実行してください。
+サーバーには`wireguard_webadmin_ja`のクライアントセッションAPIが必要です。サーバー側でマイグレーションを実行してください。
 
 Windowsには公式のWireGuard for Windowsをインストールし、対象設定をトンネルサービスとして登録します。管理者権限の端末で実行します。
 
@@ -69,7 +69,25 @@ Windowsでプラグインを使用するため、WindowsのDeveloper Modeを有�
 
 ## 既知の制約
 
-- WireGuardトンネルサービスの作成とACL設定はインストーラーへ未統合です。
 - Windows以外では接続操作を実行できません。
 - サーバーAPIをインターネットへ公開する場合、HTTPSとリバースプロキシ側のレート制限が必要です。
 - 実際のMFAサーバーとWireGuardサービスを使うEnd-to-Endテストは別途必要です。
+
+## Windowsインストーラー
+
+FlutterとNSIS 3を`PATH`から実行できる開発端末で、次を実行します。
+
+```powershell
+.\tool\build_installer.ps1
+```
+
+静的解析とテストを実行してWindowsリリース版をビルドした後、
+`dist\installer\WireGuardMfaClient-1.0.0-windows-x64-setup.exe`を生成します。
+
+セットアップは管理者権限で動作し、公式WireGuardがインストール済みであることを前提とします。
+セットアップ中に`.conf`とVPN利用者を指定すると、トンネルサービスを登録し、指定利用者へ
+そのサービスの照会・開始・停止権限を付与します。アンインストールしても、WireGuardの
+トンネルサービスと設定は削除しません。
+
+初回版のインストーラーは未署名です。組織外へ配布する前にコード署名を追加してください。
+NSIS本体は商用利用を許可するzlib/libpngライセンスで提供されています。
