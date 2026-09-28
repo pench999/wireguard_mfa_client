@@ -74,7 +74,7 @@ function Grant-TunnelServiceControl {
 }
 
 Assert-Administrator
-Write-Output 'SCRIPT_VERSION=1.1.0'
+Write-Output 'SCRIPT_VERSION=1.1.2'
 
 if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
     throw 'The WireGuard configuration path was not provided.'
@@ -102,12 +102,43 @@ Write-Output "WIREGUARD_EXE=$wireGuard"
 $serviceName = 'WireGuardTunnel$' + $tunnelName
 $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 if (-not $service) {
-    $installOutput = & $wireGuard /installtunnelservice $resolvedConfig 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to install the WireGuard tunnel service: $($installOutput -join ' ')"
+    $installArguments = @(
+        '/installtunnelservice',
+        ('"{0}"' -f $resolvedConfig)
+    )
+    $startProcessParameters = @{
+        FilePath = $wireGuard
+        ArgumentList = $installArguments
+        Wait = $true
+        PassThru = $true
     }
-    $service = Get-Service -Name $serviceName -ErrorAction Stop
+    $installProcess = Start-Process @startProcessParameters
+    Write-Output "WIREGUARD_TUNNEL_INSTALL_EXIT_CODE=$($installProcess.ExitCode)"
+
+    for ($attempt = 0; $attempt -lt 20 -and -not $service; $attempt++) {
+        Start-Sleep -Milliseconds 250
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    }
+    if (-not $service) {
+        throw "Unable to install the WireGuard tunnel service. Exit code: $($installProcess.ExitCode)"
+    }
 }
+
+if ($service.Status -ne 'Stopped') {
+    Stop-Service -Name $serviceName -Force -ErrorAction Stop
+    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+        Start-Sleep -Milliseconds 250
+        $service = Get-Service -Name $serviceName -ErrorAction Stop
+        if ($service.Status -eq 'Stopped') {
+            break
+        }
+    }
+    if ($service.Status -ne 'Stopped') {
+        throw "WireGuard tunnel service did not stop: $serviceName"
+    }
+}
+Set-Service -Name $serviceName -StartupType Manual
+Write-Output "TUNNEL_SERVICE_READY=$serviceName"
 
 Grant-TunnelServiceControl -ServiceName $serviceName -AccountName $TunnelUser
 Write-Output "TUNNEL_NAME=$tunnelName"
