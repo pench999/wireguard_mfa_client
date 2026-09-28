@@ -49,10 +49,28 @@ $msiexec = Join-Path $env:SystemRoot 'Sysnative\msiexec.exe'
 if (-not (Test-Path -LiteralPath $msiexec -PathType Leaf)) {
     $msiexec = Join-Path $env:SystemRoot 'System32\msiexec.exe'
 }
-& $msiexec /i $MsiPath /qn /norestart DO_NOT_LAUNCH=1
-$exitCode = $LASTEXITCODE
+$msiLogPath = Join-Path $env:TEMP 'WireGuardMfaClient-wireguard-msi.log'
+$msiArguments = @(
+    '/i',
+    ('"{0}"' -f $MsiPath),
+    '/qn',
+    '/norestart',
+    'DO_NOT_LAUNCH=1',
+    '/L*v',
+    ('"{0}"' -f $msiLogPath)
+)
+$startProcessParameters = @{
+    FilePath = $msiexec
+    ArgumentList = $msiArguments
+    Wait = $true
+    PassThru = $true
+}
+$msiProcess = Start-Process @startProcessParameters
+$exitCode = $msiProcess.ExitCode
+Write-Output "WIREGUARD_MSI_EXIT_CODE=$exitCode"
+Write-Output "WIREGUARD_MSI_LOG=$msiLogPath"
 if ($exitCode -ne 0 -and $exitCode -ne 3010) {
-    throw "WireGuard MSI installation failed with exit code $exitCode."
+    throw "WireGuard MSI installation failed with exit code $exitCode. Log: $msiLogPath"
 }
 
 $installedExecutable = Get-WireGuardExecutable
