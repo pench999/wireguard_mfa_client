@@ -15,24 +15,28 @@ MUTED = "#89938F"
 HALO = "#F4F7F5"
 
 
-def _points(scale: int):
+def _points(scale: int, tray: bool = False):
     def p(items):
         return [(round(x * scale), round(y * scale)) for x, y in items]
 
     left = p(
         [
-            (0.19, 0.20),
-            (0.40, 0.32),
-            (0.40, 0.44),
-            (0.31, 0.39),
-            (0.31, 0.68),
-            (0.40, 0.63),
-            (0.40, 0.75),
-            (0.19, 0.87),
+            (0.04, 0.06) if tray else (0.19, 0.20),
+            (0.43, 0.28) if tray else (0.40, 0.32),
+            (0.43, 0.42) if tray else (0.40, 0.44),
+            (0.28, 0.34) if tray else (0.31, 0.39),
+            (0.28, 0.72) if tray else (0.31, 0.68),
+            (0.43, 0.64) if tray else (0.40, 0.63),
+            (0.43, 0.78) if tray else (0.40, 0.75),
+            (0.04, 0.96) if tray else (0.19, 0.87),
         ]
     )
     right = [(scale - x, y) for x, y in left]
-    path = p([(0.40, 0.87), (0.48, 0.56), (0.52, 0.56), (0.60, 0.87)])
+    path = p(
+        [(0.34, 0.97), (0.47, 0.58), (0.53, 0.58), (0.66, 0.97)]
+        if tray
+        else [(0.40, 0.87), (0.48, 0.56), (0.52, 0.56), (0.60, 0.87)]
+    )
     return left, right, path
 
 
@@ -41,7 +45,7 @@ def render(size: int, state: str, tray: bool = False) -> Image.Image:
     canvas = size * oversample
     image = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    left, right, path = _points(canvas)
+    left, right, path = _points(canvas, tray)
 
     state_color = {
         "idle": MUTED,
@@ -61,7 +65,7 @@ def render(size: int, state: str, tray: bool = False) -> Image.Image:
     if state == "connected":
         draw.polygon(path, fill=EMERALD)
 
-    radius = round(canvas * (0.075 if tray else 0.070))
+    radius = round(canvas * (0.105 if tray else 0.070))
     center = (canvas // 2, round(canvas * 0.50))
     draw.ellipse(
         (
