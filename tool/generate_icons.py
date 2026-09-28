@@ -54,13 +54,9 @@ def render(size: int, state: str, tray: bool = False) -> Image.Image:
         "error": RED,
     }[state]
 
-    if tray:
-        outline_width = max(oversample, round(canvas * 0.012))
-        draw.line(left + [left[0]], fill=HALO, width=outline_width, joint="curve")
-        draw.line(right + [right[0]], fill=HALO, width=outline_width, joint="curve")
-
-    draw.polygon(left, fill=CHARCOAL)
-    draw.polygon(right, fill=CHARCOAL)
+    outline_width = max(round(oversample * 1.25), round(canvas * 0.012))
+    draw.polygon(left, fill=HALO, outline=CHARCOAL, width=outline_width)
+    draw.polygon(right, fill=HALO, outline=CHARCOAL, width=outline_width)
 
     if state == "connected":
         draw.polygon(path, fill=EMERALD)
