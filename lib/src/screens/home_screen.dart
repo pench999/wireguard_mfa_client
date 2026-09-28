@@ -60,6 +60,10 @@ class _HomeScreenState extends State<HomeScreen>
     _powerEvents.start(_handlePowerEvent);
     try {
       final executableDirectory = File(Platform.resolvedExecutable).parent.path;
+      final applicationIcon =
+          '$executableDirectory${Platform.pathSeparator}data'
+          '${Platform.pathSeparator}tray_icon.ico';
+      await windowManager.setIcon(applicationIcon);
       await trayManager.setIcon(_trayIconPath(executableDirectory, 'idle'));
       _currentTrayIcon = 'idle';
       await trayManager.setToolTip('WireGuard MFA Client');
