@@ -1,11 +1,18 @@
+// ignore_for_file: deprecated_member_use, deprecated_member_use_from_same_package
+
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+// tray_manager 0.7 keeps the single-icon API in its compatibility library.
+import 'package:tray_manager/legacy.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../controllers/vpn_controller.dart';
 import '../models/app_settings.dart';
 import '../services/mfa_api.dart';
 import '../services/device_identity_repository.dart';
+import '../services/power_event_service.dart';
 import '../services/settings_repository.dart';
 import '../services/tunnel_controller.dart';
 import 'mfa_auth_dialog.dart';
@@ -17,13 +24,18 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with TrayListener, WindowListener {
   final _settingsRepository = SettingsRepository();
+  final _powerEvents = PowerEventService();
   late final VpnController _controller;
   AppSettings _settings = AppSettings.empty;
   bool _loading = true;
   bool _authDialogOpen = false;
   bool _closingAuthDialog = false;
+  bool _desktopReady = false;
+  bool _exiting = false;
+  Future<void> _powerOperation = Future<void>.value();
 
   @override
   void initState() {
@@ -34,7 +46,29 @@ class _HomeScreenState extends State<HomeScreen> {
       deviceIdentityRepository: SecureDeviceIdentityRepository(),
       browserLauncher: _openAuthentication,
     )..addListener(_refresh);
+    if (Platform.isWindows) {
+      unawaited(_initializeDesktopIntegration());
+    }
     _load();
+  }
+
+  Future<void> _initializeDesktopIntegration() async {
+    windowManager.addListener(this);
+    trayManager.addListener(this);
+    await windowManager.setPreventClose(true);
+    _powerEvents.start(_handlePowerEvent);
+    try {
+      final executableDirectory = File(Platform.resolvedExecutable).parent.path;
+      await trayManager.setIcon(
+        '$executableDirectory${Platform.pathSeparator}data'
+        '${Platform.pathSeparator}tray_icon.ico',
+      );
+      await trayManager.setToolTip('WireGuard MFA Client');
+      _desktopReady = true;
+      await _updateTrayMenu();
+    } catch (error) {
+      debugPrint('Task tray initialization failed: $error');
+    }
   }
 
   Future<void> _load() async {
@@ -51,6 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _refresh() {
     if (!mounted) return;
     setState(() {});
+    if (_desktopReady) unawaited(_updateTrayMenu());
     if (_authDialogOpen &&
         !_closingAuthDialog &&
         _controller.phase != ConnectionPhase.waitingForMfa) {
@@ -81,10 +116,107 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _powerEvents.stop();
+    if (Platform.isWindows) {
+      windowManager.removeListener(this);
+      trayManager.removeListener(this);
+      if (!_exiting) {
+        unawaited(trayManager.destroy());
+      }
+    }
     _controller
       ..removeListener(_refresh)
       ..dispose();
     super.dispose();
+  }
+
+  Future<void> _updateTrayMenu() async {
+    if (!_desktopReady) return;
+    final status = _controller.isConnected
+        ? '状態: 接続済み'
+        : _controller.isBusy
+        ? '状態: ${_controller.message}'
+        : '状態: 未接続';
+    final menu = Menu(
+      items: [
+        MenuItem(key: 'show', label: '開く'),
+        MenuItem.separator(),
+        MenuItem(key: 'status', label: status, disabled: true),
+        MenuItem(
+          key: 'toggle',
+          label: _controller.isConnected ? '切断' : 'MFA認証して接続',
+          disabled: _controller.isBusy || !_settings.isComplete,
+        ),
+        MenuItem.separator(),
+        MenuItem(key: 'exit', label: '終了'),
+      ],
+    );
+    await trayManager.setContextMenu(menu);
+  }
+
+  Future<void> _showWindow() async {
+    await windowManager.show();
+    await windowManager.restore();
+    await windowManager.focus();
+  }
+
+  Future<void> _exitApplication() async {
+    if (_exiting) return;
+    _exiting = true;
+    await _controller.disconnect(_settings);
+    _powerEvents.stop();
+    if (_desktopReady) await trayManager.destroy();
+    await windowManager.setPreventClose(false);
+    await windowManager.destroy();
+  }
+
+  Future<void> _handlePowerEvent(PowerEvent event) {
+    _powerOperation = _powerOperation.then((_) async {
+      if (_exiting) return;
+      switch (event) {
+        case PowerEvent.suspend:
+          await _controller.handleSuspend(_settings);
+        case PowerEvent.resume:
+          await _controller.handleResume(_settings);
+      }
+    });
+    return _powerOperation;
+  }
+
+  @override
+  void onWindowClose() {
+    if (_exiting) return;
+    if (_desktopReady && (_controller.isConnected || _controller.isBusy)) {
+      unawaited(windowManager.hide());
+    } else {
+      unawaited(_exitApplication());
+    }
+  }
+
+  @override
+  void onTrayIconMouseDown() {
+    unawaited(_showWindow());
+  }
+
+  @override
+  void onTrayIconRightMouseDown() {
+    unawaited(trayManager.popUpContextMenu());
+  }
+
+  @override
+  void onTrayMenuItemClick(MenuItem menuItem) {
+    switch (menuItem.key) {
+      case 'show':
+        unawaited(_showWindow());
+      case 'toggle':
+        if (_controller.isConnected) {
+          unawaited(_controller.disconnect(_settings));
+        } else if (!_controller.isBusy) {
+          unawaited(_showWindow().then((_) => _controller.connect(_settings)));
+        }
+      case 'exit':
+        unawaited(_exitApplication());
+    }
   }
 
   Future<void> _openSettings() async {
