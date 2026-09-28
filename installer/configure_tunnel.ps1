@@ -74,7 +74,7 @@ function Grant-TunnelServiceControl {
 }
 
 Assert-Administrator
-Write-Output 'SCRIPT_VERSION=1.0.5'
+Write-Output 'SCRIPT_VERSION=1.1.0'
 
 if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
     throw 'The WireGuard configuration path was not provided.'

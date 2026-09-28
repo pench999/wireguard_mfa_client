@@ -12,6 +12,21 @@ if (-not $versionLine -or $versionLine -notmatch '^version:\s*([^+\s]+)') {
     throw 'pubspec.yamlからバージョンを取得できません。'
 }
 $appVersion = $Matches[1]
+$wireGuardMsi = Join-Path $projectRoot 'installer\prerequisites\wireguard-amd64-1.1.1.msi'
+$wireGuardHash = '7BFED60AD61B785C914B38B61555A975488E1D3EC472DBFB2FCDF498FCA75242'
+
+if (-not (Test-Path -LiteralPath $wireGuardMsi -PathType Leaf)) {
+    throw "WireGuard MSIが見つかりません: $wireGuardMsi"
+}
+$actualWireGuardHash = (Get-FileHash -LiteralPath $wireGuardMsi -Algorithm SHA256).Hash
+if ($actualWireGuardHash -ne $wireGuardHash) {
+    throw "WireGuard MSIのSHA-256が一致しません: $actualWireGuardHash"
+}
+$wireGuardSignature = Get-AuthenticodeSignature -LiteralPath $wireGuardMsi
+if ($wireGuardSignature.Status -ne 'Valid' -or
+    -not $wireGuardSignature.SignerCertificate.Subject.Contains('O=WireGuard LLC')) {
+    throw "WireGuard MSIの署名が無効です: $($wireGuardSignature.Status)"
+}
 
 if (-not $Flutter) {
     $flutterCommand = Get-Command flutter.bat -ErrorAction SilentlyContinue

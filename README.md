@@ -28,7 +28,7 @@ V1は、事前に構成されたWireGuardトンネルへ接続前MFAを追加す
 
 サーバーには`wireguard_webadmin_ja`のクライアントセッションAPIが必要です。サーバー側でマイグレーションを実行してください。
 
-Windowsには公式のWireGuard for Windowsをインストールし、対象設定をトンネルサービスとして登録します。管理者権限の端末で実行します。
+Windowsインストーラーは、未導入の場合に同梱した公式WireGuard for Windowsをサイレントインストールし、対象設定をトンネルサービスとして登録します。管理者権限が必要です。
 
 ```powershell
 & "$env:ProgramFiles\WireGuard\wireguard.exe" /installtunnelservice "C:\path\to\office-wg.conf"
@@ -81,10 +81,12 @@ FlutterとNSIS 3を`PATH`から実行できる開発端末で、次を実行し�
 .\tool\build_installer.ps1
 ```
 
-静的解析とテストを実行してWindowsリリース版をビルドした後、
-`dist\installer\WireGuardMfaClient-1.0.0-windows-x64-setup.exe`を生成します。
+`installer\prerequisites\README.md`に記載された公式WireGuard MSIを配置してから実行してください。
+ビルド時にMSIのSHA-256とAuthenticode署名を検証します。静的解析とテストを実行して
+Windowsリリース版をビルドした後、`dist\installer\WireGuardMfaClient-<version>-windows-x64-setup.exe`を生成します。
 
-セットアップは管理者権限で動作し、公式WireGuardがインストール済みであることを前提とします。
+セットアップは管理者権限で動作します。WireGuard for Windowsが未導入の場合は、固定・検証済みの
+公式WireGuard 1.1.1 MSIをサイレントインストールし、GUIを起動しません。導入済みの場合は既存版を使用します。
 セットアップ中に`.conf`とVPN利用者を指定すると、トンネルサービスを登録し、指定利用者へ
 そのサービスの照会・開始・停止権限を付与します。アンインストールしても、WireGuardの
 トンネルサービスと設定は削除しません。
