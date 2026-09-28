@@ -86,6 +86,10 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/runner/resources/app_icon.ico"
   RENAME "tray_icon.ico"
   COMPONENT Runtime)
 
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/runner/resources/tray/"
+  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/tray"
+  COMPONENT Runtime)
+
 if(PLUGIN_BUNDLED_LIBRARIES)
   install(FILES "${PLUGIN_BUNDLED_LIBRARIES}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

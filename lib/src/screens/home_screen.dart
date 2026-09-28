@@ -35,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen>
   bool _closingAuthDialog = false;
   bool _desktopReady = false;
   bool _exiting = false;
+  String? _currentTrayIcon;
   Future<void> _powerOperation = Future<void>.value();
 
   @override
@@ -59,10 +60,8 @@ class _HomeScreenState extends State<HomeScreen>
     _powerEvents.start(_handlePowerEvent);
     try {
       final executableDirectory = File(Platform.resolvedExecutable).parent.path;
-      await trayManager.setIcon(
-        '$executableDirectory${Platform.pathSeparator}data'
-        '${Platform.pathSeparator}tray_icon.ico',
-      );
+      await trayManager.setIcon(_trayIconPath(executableDirectory, 'idle'));
+      _currentTrayIcon = 'idle';
       await trayManager.setToolTip('WireGuard MFA Client');
       _desktopReady = true;
       await _updateTrayMenu();
@@ -132,6 +131,18 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _updateTrayMenu() async {
     if (!_desktopReady) return;
+    final iconState = switch (_controller.phase) {
+      ConnectionPhase.connected => 'connected',
+      ConnectionPhase.waitingForMfa ||
+      ConnectionPhase.startingTunnel => 'authenticating',
+      ConnectionPhase.error => 'error',
+      _ => 'idle',
+    };
+    if (_currentTrayIcon != iconState) {
+      final executableDirectory = File(Platform.resolvedExecutable).parent.path;
+      await trayManager.setIcon(_trayIconPath(executableDirectory, iconState));
+      _currentTrayIcon = iconState;
+    }
     final status = _controller.isConnected
         ? '状態: 接続済み'
         : _controller.isBusy
@@ -153,6 +164,10 @@ class _HomeScreenState extends State<HomeScreen>
     );
     await trayManager.setContextMenu(menu);
   }
+
+  String _trayIconPath(String executableDirectory, String state) =>
+      '$executableDirectory${Platform.pathSeparator}data'
+      '${Platform.pathSeparator}tray${Platform.pathSeparator}tray_$state.ico';
 
   Future<void> _showWindow() async {
     await windowManager.show();
