@@ -19,6 +19,7 @@ echo   - WireGuard MFA Client application files
 echo   - Tunnel services whose names start with wgmfa_
 echo   - Protected tunnel configurations and provisioning logs
 echo   - Current user's saved server settings and device identity
+echo   - MFA Client WebView2 cookies, sessions, and cache
 echo.
 echo WireGuard for Windows itself and unrelated tunnels are kept.
 echo Server-side registered device records are NOT removed.
@@ -53,6 +54,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
   "  (Join-Path $env:ProgramFiles 'WireGuard MFA Client')," ^
   "  (Join-Path $env:ProgramData 'WireGuard MFA Client')," ^
   "  (Join-Path $env:APPDATA 'jp.co.fairway\WireGuard MFA Client')," ^
+  "  (Join-Path $env:LOCALAPPDATA 'flutter_webview_windows\wireguard_mfa_client')," ^
   "  (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\WireGuard MFA Client')," ^
   "  (Join-Path $env:PUBLIC 'Desktop\WireGuard MFA Client.lnk')" ^
   ");" ^
