@@ -57,23 +57,28 @@ class VpnController extends ChangeNotifier {
 
   bool get isConnected => phase == ConnectionPhase.connected;
 
-  Future<void> initialize(AppSettings settings) async {
+  Future<bool> initialize(AppSettings settings) async {
     if (!_tunnel.isSupported) {
       phase = ConnectionPhase.unsupported;
       message = 'このプラットフォームではVPN制御を利用できません';
       notifyListeners();
-      return;
+      return true;
     }
-    if (!settings.isComplete) return;
+    if (!settings.isComplete) return false;
     final state = await _tunnel.getState(settings.tunnelName);
+    errorMessage = null;
     if (state == TunnelState.running) {
       phase = ConnectionPhase.connected;
       message = 'WireGuard接続済み';
     } else if (state == TunnelState.notInstalled) {
       _setError('WireGuardTunnel\$${settings.tunnelName}を事前にインストールしてください。');
-      return;
+      return false;
+    } else {
+      phase = ConnectionPhase.idle;
+      message = '接続できます';
     }
     notifyListeners();
+    return true;
   }
 
   Future<void> connect(AppSettings settings) async {

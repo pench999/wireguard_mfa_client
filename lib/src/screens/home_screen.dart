@@ -15,6 +15,7 @@ import '../services/device_identity_repository.dart';
 import '../services/power_event_service.dart';
 import '../services/settings_repository.dart';
 import '../services/tunnel_controller.dart';
+import '../services/tunnel_provisioner.dart';
 import 'mfa_auth_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -27,6 +28,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with TrayListener, WindowListener {
   final _settingsRepository = SettingsRepository();
+  final _mfaApi = MfaApi();
+  final _deviceIdentityRepository = SecureDeviceIdentityRepository();
   final _powerEvents = PowerEventService();
   late final VpnController _controller;
   AppSettings _settings = AppSettings.empty;
@@ -42,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen>
   void initState() {
     super.initState();
     _controller = VpnController(
-      api: MfaApi(),
+      api: _mfaApi,
       tunnel: createTunnelController(),
       deviceIdentityRepository: SecureDeviceIdentityRepository(),
       browserLauncher: _openAuthentication,
@@ -81,8 +84,10 @@ class _HomeScreenState extends State<HomeScreen>
       _settings = settings;
       _loading = false;
     });
-    await _controller.initialize(settings);
-    if (mounted && !settings.isComplete) await _openSettings();
+    final tunnelInstalled = await _controller.initialize(settings);
+    if (mounted && (!settings.isComplete || !tunnelInstalled)) {
+      await _startProvisioning();
+    }
   }
 
   void _refresh() {
@@ -238,17 +243,96 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<void> _openSettings() async {
-    final result = await showDialog<AppSettings>(
+  Future<void> _startProvisioning() async {
+    if (_controller.isBusy) return;
+    final serverUrl = await showDialog<String>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _SettingsDialog(initial: _settings),
+      builder: (context) => _ServerDialog(initial: _settings.serverUrl),
     );
-    if (result == null) return;
-    await _settingsRepository.save(result);
-    if (!mounted) return;
-    setState(() => _settings = result);
-    await _controller.initialize(result);
+    if (serverUrl == null || !mounted) return;
+    try {
+      final serverUri = Uri.parse(
+        serverUrl.endsWith('/') ? serverUrl : '$serverUrl/',
+      );
+      final device = await _deviceIdentityRepository.loadOrCreate();
+      final session = await _mfaApi.createProvisioningSession(
+        serverUri,
+        device,
+      );
+      if (!mounted) return;
+      var cancelled = false;
+      unawaited(
+        showMfaAuthDialog(context, session.browserUrl).then((result) {
+          if (result == MfaAuthDialogResult.cancelled) cancelled = true;
+        }),
+      );
+      while (DateTime.now().isBefore(session.expiresAt)) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        if (cancelled) throw StateError('初期設定がキャンセルされました。');
+        final state = await _mfaApi.getProvisioningStatus(serverUri, session);
+        if (state.status == 'authorized') break;
+        if (state.status == 'failed' || state.status == 'expired') {
+          throw StateError('サーバーで初期設定を完了できませんでした。');
+        }
+      }
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(MfaAuthDialogResult.completed);
+      }
+      _showProvisioningProgress();
+      final provisioned = await _mfaApi.downloadProvisioningConfig(
+        serverUri,
+        session,
+      );
+      await provisionTunnel(provisioned.tunnelName, provisioned.config);
+      final settings = AppSettings(
+        serverUrl: serverUrl,
+        peerUuid: provisioned.peerUuid,
+        tunnelName: provisioned.tunnelName,
+      );
+      await _settingsRepository.save(settings);
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      setState(() => _settings = settings);
+      await _controller.initialize(settings);
+    } catch (error) {
+      if (!mounted) return;
+      Navigator.of(
+        context,
+        rootNavigator: true,
+      ).popUntil((route) => route.isFirst);
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('初期設定に失敗しました'),
+          content: Text(error.toString().replaceFirst('Bad state: ', '')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('閉じる'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  void _showProvisioningProgress() {
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 18),
+              Expanded(child: Text('サーバーに接続しています...')),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -261,8 +345,10 @@ class _HomeScreenState extends State<HomeScreen>
         ),
         actions: [
           IconButton(
-            onPressed: _controller.isBusy || _loading ? null : _openSettings,
-            tooltip: '設定',
+            onPressed: _controller.isBusy || _loading
+                ? null
+                : _startProvisioning,
+            tooltip: '再設定',
             icon: const Icon(Icons.settings_outlined),
           ),
           const SizedBox(width: 8),
@@ -479,40 +565,34 @@ class _Notice extends StatelessWidget {
   }
 }
 
-class _SettingsDialog extends StatefulWidget {
-  const _SettingsDialog({required this.initial});
-  final AppSettings initial;
+class _ServerDialog extends StatefulWidget {
+  const _ServerDialog({required this.initial});
+  final String initial;
 
   @override
-  State<_SettingsDialog> createState() => _SettingsDialogState();
+  State<_ServerDialog> createState() => _ServerDialogState();
 }
 
-class _SettingsDialogState extends State<_SettingsDialog> {
+class _ServerDialogState extends State<_ServerDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _server;
-  late final TextEditingController _peer;
-  late final TextEditingController _tunnel;
 
   @override
   void initState() {
     super.initState();
-    _server = TextEditingController(text: widget.initial.serverUrl);
-    _peer = TextEditingController(text: widget.initial.peerUuid);
-    _tunnel = TextEditingController(text: widget.initial.tunnelName);
+    _server = TextEditingController(text: widget.initial);
   }
 
   @override
   void dispose() {
     _server.dispose();
-    _peer.dispose();
-    _tunnel.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('接続設定', style: TextStyle(fontSize: 20)),
+      title: const Text('MFA Clientの初期設定', style: TextStyle(fontSize: 20)),
       content: SizedBox(
         width: 520,
         child: Form(
@@ -526,38 +606,22 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                   labelText: 'サーバーURL',
                   hintText: 'https://vpn.example.com',
                 ),
-                validator: (_) =>
-                    _candidate.validate()?.contains('サーバー') == true
-                    ? _candidate.validate()
-                    : null,
-              ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _peer,
-                decoration: const InputDecoration(labelText: 'peer UUID'),
-                validator: (_) =>
-                    _candidate.validate()?.contains('peer UUID') == true
-                    ? _candidate.validate()
-                    : null,
-              ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _tunnel,
-                decoration: const InputDecoration(
-                  labelText: 'WireGuardトンネル名',
-                  hintText: 'wg0',
-                ),
-                validator: (_) =>
-                    _candidate.validate()?.contains('トンネル名') == true
-                    ? _candidate.validate()
-                    : null,
+                validator: (value) {
+                  final uri = Uri.tryParse(value?.trim() ?? '');
+                  if (uri == null ||
+                      !uri.hasAuthority ||
+                      (uri.scheme != 'https' && uri.scheme != 'http')) {
+                    return 'HTTPまたはHTTPSのサーバーURLを入力してください。';
+                  }
+                  return null;
+                },
               ),
             ],
           ),
         ),
       ),
       actions: [
-        if (widget.initial.isComplete)
+        if (widget.initial.isNotEmpty)
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('キャンセル'),
@@ -565,19 +629,13 @@ class _SettingsDialogState extends State<_SettingsDialog> {
         FilledButton.icon(
           onPressed: () {
             if (_formKey.currentState!.validate()) {
-              Navigator.pop(context, _candidate);
+              Navigator.pop(context, _server.text.trim());
             }
           },
-          icon: const Icon(Icons.save_outlined),
-          label: const Text('保存'),
+          icon: const Icon(Icons.login),
+          label: const Text('認証を開始'),
         ),
       ],
     );
   }
-
-  AppSettings get _candidate => AppSettings(
-    serverUrl: _server.text,
-    peerUuid: _peer.text,
-    tunnelName: _tunnel.text,
-  );
 }

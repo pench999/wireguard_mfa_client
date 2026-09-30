@@ -13,6 +13,16 @@ const _settings = AppSettings(
 );
 
 void main() {
+  test('initialize requires provisioning when the tunnel is missing', () async {
+    final controller = _controller(_FakeTunnel(TunnelState.notInstalled));
+
+    final installed = await controller.initialize(_settings);
+
+    expect(installed, isFalse);
+    expect(controller.errorMessage, contains(r'WireGuardTunnel$office'));
+    controller.dispose();
+  });
+
   test('suspend stops the tunnel and returns to idle', () async {
     final tunnel = _FakeTunnel(TunnelState.running);
     final controller = _controller(tunnel);
