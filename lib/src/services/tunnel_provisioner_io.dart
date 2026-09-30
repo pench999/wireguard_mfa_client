@@ -21,10 +21,11 @@ Future<void> provisionTunnel(String tunnelName, String config) async {
     final domain = Platform.environment['USERDOMAIN']?.trim();
     final user = Platform.environment['USERNAME']?.trim();
     final account = domain == null || domain.isEmpty ? user : '$domain\\$user';
-    const elevatedCommand =
-        r'& $env:WGMFA_PROVISION_SCRIPT '
-        r'-ConfigPath $env:WGMFA_CONFIG_PATH '
-        r'-TunnelUser $env:WGMFA_TUNNEL_USER';
+    String quotePowerShell(String value) => "'${value.replaceAll("'", "''")}'";
+    final elevatedCommand =
+        '& ${quotePowerShell(script)} '
+        '-ConfigPath ${quotePowerShell(temporaryConfig.path)} '
+        '-TunnelUser ${quotePowerShell(account ?? '')}';
     final encodedCommand = base64Encode([
       for (final unit in elevatedCommand.codeUnits) ...[unit & 0xff, unit >> 8],
     ]);
@@ -32,17 +33,13 @@ Future<void> provisionTunnel(String tunnelName, String config) async {
         "\$process = Start-Process -FilePath 'powershell.exe' "
         "-ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand','$encodedCommand') "
         "-Verb RunAs -Wait -PassThru; exit \$process.ExitCode";
-    final result = await Process.run(
-      'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command],
-      runInShell: false,
-      environment: {
-        ...Platform.environment,
-        'WGMFA_PROVISION_SCRIPT': script,
-        'WGMFA_CONFIG_PATH': temporaryConfig.path,
-        'WGMFA_TUNNEL_USER': account ?? '',
-      },
-    );
+    final result = await Process.run('powershell.exe', [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      command,
+    ], runInShell: false);
     if (result.exitCode != 0) {
       final logPath =
           '${Platform.environment['ProgramData']}'
