@@ -5,6 +5,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$logDirectory = Join-Path $env:ProgramData 'WireGuard MFA Client'
+New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+$logPath = Join-Path $logDirectory 'provision.log'
+Start-Transcript -Path $logPath -Append -Force | Out-Null
+Write-Output "PROVISION_STARTED=$(Get-Date -Format o)"
 
 function Get-WireGuardExecutable {
     foreach ($directory in @($env:ProgramW6432, $env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ } | Select-Object -Unique) {
@@ -75,7 +80,9 @@ try {
     Set-Service -Name $serviceName -StartupType Manual
     & "$env:SystemRoot\System32\sc.exe" stop $serviceName | Out-Null
     Grant-TunnelServiceControl -ServiceName $serviceName -AccountName $TunnelUser
+    Write-Output "PROVISION_COMPLETED=$serviceName"
 } catch {
+    Write-Error $_
     Remove-Item -LiteralPath $storedConfig -Force -ErrorAction SilentlyContinue
     throw
 }
