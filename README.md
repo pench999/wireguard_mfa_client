@@ -30,7 +30,7 @@ WebとAndroidはビルド可能な構成を維持しますが、VPNサービス�
 
 サーバーには`wireguard_webadmin_ja`のクライアントセッションAPIが必要です。サーバー側でマイグレーションを実行してください。
 
-Windowsインストーラーは、未導入の場合に同梱した公式WireGuard for Windowsをサイレントインストールします。トンネル登録は初回起動時の認証後に行うため、インストール時のconf指定や利用者指定はありません。
+Windowsインストーラーは、Microsoft Visual C++ Runtimeと、未導入の場合に同梱した公式WireGuard for Windowsをサイレントインストールします。トンネル登録は初回起動時の認証後に行うため、インストール時のconf指定や利用者指定はありません。
 
 ## 開発環境
 

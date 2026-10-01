@@ -49,7 +49,19 @@ Section "Install"
   File "install_wireguard.ps1"
 
   InitPluginsDir
+  File /oname=$PLUGINSDIR\vc_redist.x64.exe "prerequisites\vc_redist.x64.exe"
   File /oname=$PLUGINSDIR\wireguard-amd64-1.1.1.msi "prerequisites\wireguard-amd64-1.1.1.msi"
+
+  DetailPrint "Microsoft Visual C++ Runtimeを確認しています..."
+  nsExec::ExecToLog '$\"$PLUGINSDIR\vc_redist.x64.exe$\" /install /quiet /norestart'
+  Pop $0
+  ${If} $0 == 3010
+    SetRebootFlag true
+  ${ElseIf} $0 != 0
+  ${AndIf} $0 != 1638
+    MessageBox MB_ICONSTOP "Microsoft Visual C++ Runtimeのインストールに失敗しました（終了コード: $0）。"
+    Abort
+  ${EndIf}
 
   SetRegView 64
   WriteUninstaller "$INSTDIR\uninstall.exe"

@@ -34,6 +34,7 @@ migrate_working_dir/
 /coverage/
 /dist/
 /installer/prerequisites/*.msi
+/installer/prerequisites/*.exe
 
 # Symbolication related
 app.*.symbols
