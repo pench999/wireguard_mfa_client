@@ -73,8 +73,32 @@ function Grant-TunnelServiceControl {
     }
 }
 
+function Stop-TunnelService {
+    param(
+        [Parameter(Mandatory = $true)][string]$ServiceName
+    )
+
+    # Registration starts a new tunnel immediately. SCM can reject a stop
+    # control while the service is still transitioning to Running.
+    Set-Service -Name $ServiceName -StartupType Manual
+    $lastStopOutput = @()
+    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+        $service = Get-Service -Name $ServiceName -ErrorAction Stop
+        if ($service.Status -eq 'Stopped') {
+            return
+        }
+        if ($service.Status -notin @('StartPending', 'StopPending')) {
+            $lastStopOutput = & "$env:SystemRoot\System32\sc.exe" stop $ServiceName 2>&1
+        }
+        Start-Sleep -Milliseconds 500
+    }
+
+    $service = Get-Service -Name $ServiceName -ErrorAction Stop
+    throw "WireGuard tunnel service did not stop ($($service.Status)): $ServiceName $($lastStopOutput -join ' ')"
+}
+
 Assert-Administrator
-Write-Output 'SCRIPT_VERSION=1.1.2'
+Write-Output 'SCRIPT_VERSION=1.1.3'
 
 if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
     throw 'The WireGuard configuration path was not provided.'
@@ -124,20 +148,7 @@ if (-not $service) {
     }
 }
 
-if ($service.Status -ne 'Stopped') {
-    Stop-Service -Name $serviceName -Force -ErrorAction Stop
-    for ($attempt = 0; $attempt -lt 60; $attempt++) {
-        Start-Sleep -Milliseconds 250
-        $service = Get-Service -Name $serviceName -ErrorAction Stop
-        if ($service.Status -eq 'Stopped') {
-            break
-        }
-    }
-    if ($service.Status -ne 'Stopped') {
-        throw "WireGuard tunnel service did not stop: $serviceName"
-    }
-}
-Set-Service -Name $serviceName -StartupType Manual
+Stop-TunnelService -ServiceName $serviceName
 Write-Output "TUNNEL_SERVICE_READY=$serviceName"
 
 Grant-TunnelServiceControl -ServiceName $serviceName -AccountName $TunnelUser

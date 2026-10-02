@@ -2,6 +2,8 @@
 
 #include <optional>
 
+#include <flutter/standard_method_codec.h>
+
 #include "flutter/generated_plugin_registrant.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -25,6 +27,11 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  power_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(),
+          "wireguard_mfa_client/power",
+          &flutter::StandardMethodCodec::GetInstance());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -40,6 +47,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  power_channel_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -62,6 +70,21 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   switch (message) {
+    case WM_POWERBROADCAST:
+      if (power_channel_) {
+        if (wparam == PBT_APMSUSPEND) {
+          power_suspended_ = true;
+          power_channel_->InvokeMethod(
+              "suspend", std::make_unique<flutter::EncodableValue>());
+        } else if (power_suspended_ &&
+                   (wparam == PBT_APMRESUMEAUTOMATIC ||
+                    wparam == PBT_APMRESUMESUSPEND)) {
+          power_suspended_ = false;
+          power_channel_->InvokeMethod(
+              "resume", std::make_unique<flutter::EncodableValue>());
+        }
+      }
+      return TRUE;
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;

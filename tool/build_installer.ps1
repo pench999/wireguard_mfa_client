@@ -14,6 +14,8 @@ if (-not $versionLine -or $versionLine -notmatch '^version:\s*([^+\s]+)') {
 $appVersion = $Matches[1]
 $wireGuardMsi = Join-Path $projectRoot 'installer\prerequisites\wireguard-amd64-1.1.1.msi'
 $wireGuardHash = '7BFED60AD61B785C914B38B61555A975488E1D3EC472DBFB2FCDF498FCA75242'
+$visualCppInstaller = Join-Path $projectRoot 'installer\prerequisites\vc_redist.x64.exe'
+$visualCppHash = 'CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B'
 
 if (-not (Test-Path -LiteralPath $wireGuardMsi -PathType Leaf)) {
     throw "WireGuard MSIが見つかりません: $wireGuardMsi"
@@ -26,6 +28,19 @@ $wireGuardSignature = Get-AuthenticodeSignature -LiteralPath $wireGuardMsi
 if ($wireGuardSignature.Status -ne 'Valid' -or
     -not $wireGuardSignature.SignerCertificate.Subject.Contains('O=WireGuard LLC')) {
     throw "WireGuard MSIの署名が無効です: $($wireGuardSignature.Status)"
+}
+
+if (-not (Test-Path -LiteralPath $visualCppInstaller -PathType Leaf)) {
+    throw "Visual C++ Runtimeが見つかりません: $visualCppInstaller"
+}
+$actualVisualCppHash = (Get-FileHash -LiteralPath $visualCppInstaller -Algorithm SHA256).Hash
+if ($actualVisualCppHash -ne $visualCppHash) {
+    throw "Visual C++ RuntimeのSHA-256が一致しません: $actualVisualCppHash"
+}
+$visualCppSignature = Get-AuthenticodeSignature -LiteralPath $visualCppInstaller
+if ($visualCppSignature.Status -ne 'Valid' -or
+    -not $visualCppSignature.SignerCertificate.Subject.Contains('O=Microsoft Corporation')) {
+    throw "Visual C++ Runtimeの署名が無効です: $($visualCppSignature.Status)"
 }
 
 if (-not $Flutter) {

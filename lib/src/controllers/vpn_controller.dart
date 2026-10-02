@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -27,9 +29,9 @@ class VpnController extends ChangeNotifier {
     required TunnelController tunnel,
     required DeviceIdentityRepository deviceIdentityRepository,
     BrowserLauncher? browserLauncher,
-  }) : _api = api, // ignore: prefer_initializing_formals
-       _tunnel = tunnel, // ignore: prefer_initializing_formals
-       _deviceIdentityRepository = deviceIdentityRepository, // ignore: prefer_initializing_formals
+  }) : _api = api,
+       _tunnel = tunnel,
+       _deviceIdentityRepository = deviceIdentityRepository,
        _browserLauncher =
            browserLauncher ??
            ((uri) => launchUrl(uri, mode: LaunchMode.externalApplication));
@@ -55,23 +57,28 @@ class VpnController extends ChangeNotifier {
 
   bool get isConnected => phase == ConnectionPhase.connected;
 
-  Future<void> initialize(AppSettings settings) async {
+  Future<bool> initialize(AppSettings settings) async {
     if (!_tunnel.isSupported) {
       phase = ConnectionPhase.unsupported;
       message = 'このプラットフォームではVPN制御を利用できません';
       notifyListeners();
-      return;
+      return true;
     }
-    if (!settings.isComplete) return;
+    if (!settings.isComplete) return false;
     final state = await _tunnel.getState(settings.tunnelName);
+    errorMessage = null;
     if (state == TunnelState.running) {
       phase = ConnectionPhase.connected;
       message = 'WireGuard接続済み';
     } else if (state == TunnelState.notInstalled) {
       _setError('WireGuardTunnel\$${settings.tunnelName}を事前にインストールしてください。');
-      return;
+      return false;
+    } else {
+      phase = ConnectionPhase.idle;
+      message = '接続できます';
     }
     notifyListeners();
+    return true;
   }
 
   Future<void> connect(AppSettings settings) async {
@@ -161,6 +168,41 @@ class VpnController extends ChangeNotifier {
   }
 
   Future<void> disconnect(AppSettings settings) async {
+    await _disconnect(settings, messageAfterStop: '切断しました');
+  }
+
+  Future<void> handleSuspend(AppSettings settings) async {
+    await _disconnect(settings, messageAfterStop: 'スリープのため切断しました');
+  }
+
+  Future<void> handleResume(AppSettings settings) async {
+    _cancelRequested = true;
+    phase = ConnectionPhase.disconnecting;
+    message = '復帰後の接続状態を確認しています';
+    errorMessage = null;
+    notifyListeners();
+    try {
+      if (_tunnel.isSupported && settings.tunnelName.isNotEmpty) {
+        final tunnelName = settings.tunnelName.trim();
+        final state = await _tunnel.getState(tunnelName);
+        if (state == TunnelState.running || state == TunnelState.starting) {
+          await _tunnel.stop(tunnelName);
+        }
+      }
+      _session = null;
+      unlockedUntil = null;
+      phase = ConnectionPhase.idle;
+      message = '復帰しました。再接続にはMFA認証が必要です';
+      notifyListeners();
+    } on TunnelException catch (error) {
+      _setError(_messageForTunnelError(error));
+    }
+  }
+
+  Future<void> _disconnect(
+    AppSettings settings, {
+    required String messageAfterStop,
+  }) async {
     _cancelRequested = true;
     phase = ConnectionPhase.disconnecting;
     message = '切断しています';
@@ -182,7 +224,7 @@ class VpnController extends ChangeNotifier {
       _session = null;
       unlockedUntil = null;
       phase = ConnectionPhase.idle;
-      message = lockWarning ?? '切断しました';
+      message = lockWarning ?? messageAfterStop;
       errorMessage = lockWarning;
       notifyListeners();
     } on TunnelException catch (error) {
@@ -216,8 +258,7 @@ class VpnController extends ChangeNotifier {
     'device_required' => 'このユーザーは登録済み端末からのみ接続できます。',
     'device_unauthorized' => 'この端末の登録情報を確認できません。管理者に再登録を依頼してください。',
     'device_revoked' => 'この端末は管理者によって失効されています。',
-    'device_registration_not_allowed' =>
-      '別の端末が登録されています。管理者に再登録の許可を依頼してください。',
+    'device_registration_not_allowed' => '別の端末が登録されています。管理者に再登録の許可を依頼してください。',
     _ => 'MFAサーバーとの処理に失敗しました。',
   };
 
