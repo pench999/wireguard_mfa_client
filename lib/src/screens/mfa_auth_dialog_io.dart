@@ -60,6 +60,11 @@ class _MfaAuthDialogState extends State<_MfaAuthDialog> {
     try {
       version = await WebviewController.getWebViewVersion();
       if (version == null) {
+        await _writeInitializationError(
+          null,
+          'runtime_not_found',
+          'Microsoft Edge WebView2 Runtime was not detected.',
+        );
         await _fallBackToExternalBrowser(
           'Microsoft Edge WebView2 Runtimeが見つかりません。',
         );

@@ -50,6 +50,7 @@ Section "Install"
 
   InitPluginsDir
   File /oname=$PLUGINSDIR\vc_redist.x64.exe "prerequisites\vc_redist.x64.exe"
+  File /oname=$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe "prerequisites\MicrosoftEdgeWebview2Setup.exe"
   File /oname=$PLUGINSDIR\wireguard-amd64-1.1.1.msi "prerequisites\wireguard-amd64-1.1.1.msi"
 
   DetailPrint "Microsoft Visual C++ Runtimeを確認しています..."
@@ -61,6 +62,16 @@ Section "Install"
   ${AndIf} $0 != 1638
     MessageBox MB_ICONSTOP "Microsoft Visual C++ Runtimeのインストールに失敗しました（終了コード: $0）。"
     Abort
+  ${EndIf}
+
+  DetailPrint "Microsoft Edge WebView2 Runtimeを確認しています..."
+  nsExec::ExecToLog '$\"$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe$\" /silent /install'
+  Pop $0
+  ${If} $0 == 3010
+    SetRebootFlag true
+  ${ElseIf} $0 != 0
+  ${AndIf} $0 != 1638
+    MessageBox MB_ICONEXCLAMATION "Microsoft Edge WebView2 Runtimeを導入できませんでした（終了コード: $0）。認証時は既定ブラウザーを使用します。"
   ${EndIf}
 
   SetRegView 64

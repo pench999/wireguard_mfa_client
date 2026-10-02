@@ -16,6 +16,8 @@ $wireGuardMsi = Join-Path $projectRoot 'installer\prerequisites\wireguard-amd64-
 $wireGuardHash = '7BFED60AD61B785C914B38B61555A975488E1D3EC472DBFB2FCDF498FCA75242'
 $visualCppInstaller = Join-Path $projectRoot 'installer\prerequisites\vc_redist.x64.exe'
 $visualCppHash = 'CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B'
+$webViewBootstrapper = Join-Path $projectRoot 'installer\prerequisites\MicrosoftEdgeWebview2Setup.exe'
+$webViewBootstrapperHash = '48A7B31419A8EB4FFFDC7B6A02F6B4DFDA60687FC897116BE15370E10C2B66A7'
 
 if (-not (Test-Path -LiteralPath $wireGuardMsi -PathType Leaf)) {
     throw "WireGuard MSIが見つかりません: $wireGuardMsi"
@@ -41,6 +43,19 @@ $visualCppSignature = Get-AuthenticodeSignature -LiteralPath $visualCppInstaller
 if ($visualCppSignature.Status -ne 'Valid' -or
     -not $visualCppSignature.SignerCertificate.Subject.Contains('O=Microsoft Corporation')) {
     throw "Visual C++ Runtimeの署名が無効です: $($visualCppSignature.Status)"
+}
+
+if (-not (Test-Path -LiteralPath $webViewBootstrapper -PathType Leaf)) {
+    throw "WebView2 Bootstrapperが見つかりません: $webViewBootstrapper"
+}
+$actualWebViewHash = (Get-FileHash -LiteralPath $webViewBootstrapper -Algorithm SHA256).Hash
+if ($actualWebViewHash -ne $webViewBootstrapperHash) {
+    throw "WebView2 BootstrapperのSHA-256が一致しません: $actualWebViewHash"
+}
+$webViewSignature = Get-AuthenticodeSignature -LiteralPath $webViewBootstrapper
+if ($webViewSignature.Status -ne 'Valid' -or
+    -not $webViewSignature.SignerCertificate.Subject.Contains('O=Microsoft Corporation')) {
+    throw "WebView2 Bootstrapperの署名が無効です: $($webViewSignature.Status)"
 }
 
 if (-not $Flutter) {
