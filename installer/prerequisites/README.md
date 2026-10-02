@@ -21,19 +21,8 @@ Also place the official Microsoft Visual C++ Redistributable below:
 The EXE is intentionally excluded from Git. It is verified during the installer
 build and bundled so clean Windows PCs can run the Flutter application offline.
 
-Also place the official Microsoft Edge WebView2 Evergreen Standalone x64
-Installer below:
-
-- File: `MicrosoftEdgeWebView2RuntimeInstallerX64.exe`
-- Source: `https://go.microsoft.com/fwlink/?linkid=2124701`
-- Version: `1.3.271.7`
-- SHA-256: `F6DF8E4BC857786FF641CD01DA1449169EAF8236C936CED485EA61685BA4DA40`
-- Authenticode signer: `Microsoft Corporation`
-
-The Standalone Installer is intentionally excluded from Git. The generated setup
-embeds it and installs the Evergreen Runtime per-machine without downloading it
-during setup. Browser fallback remains available if organization policy blocks
-the Runtime installation.
+WebView2 Runtime is not bundled or installed by this setup. The application uses
+an existing Runtime when available and otherwise opens the default browser.
 
 WireGuard source and license information:
 `https://git.zx2c4.com/wireguard-windows/`

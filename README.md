@@ -1,5 +1,7 @@
 # WireGuard MFA Client
 
+リリース候補: **1.3.10 (Windows 11 x64)**。変更内容・既知の制約・検証結果は[CHANGELOG](CHANGELOG.md)、配布ファイルのSHA-256は[SHA256SUMS](releases/v1.3.10/SHA256SUMS)を参照してください。
+
 `wireguard_webadmin_ja`の接続前MFAと、WireGuard for Windowsのトンネル操作を一つにまとめるFlutterクライアントです。
 
 ## MVPの対象
@@ -30,7 +32,9 @@ WebとAndroidはビルド可能な構成を維持しますが、VPNサービス�
 
 サーバーには`wireguard_webadmin_ja`のクライアントセッションAPIが必要です。サーバー側でマイグレーションを実行してください。
 
-Windowsインストーラーは、Microsoft Visual C++ Runtime、Microsoft Edge WebView2 Runtime Standalone Installer、および未導入の場合に同梱した公式WireGuard for Windowsをサイレントインストールします。WebView2 Runtimeの導入にセットアップ中の追加ダウンロードは不要です。トンネル登録は初回起動時の認証後に行うため、インストール時のconf指定や利用者指定はありません。
+Windowsインストーラーは、Microsoft Visual C++ Runtime、および未導入の場合に同梱した公式WireGuard for Windowsをサイレントインストールします。WebView2 Runtimeは同梱・導入せず、利用できない環境では既定ブラウザーで認証します。トンネル登録は初回起動時の認証後に行うため、インストール時のconf指定や利用者指定はありません。
+
+管理者権限はインストール時と初回トンネル設定時に必要です。インストール完了後は利用者のスタートメニューからアプリを起動してください。セットアップ完了画面からのアプリ起動は行いません。
 
 WebView2のユーザーデータは`%LOCALAPPDATA%\WireGuard MFA Client\WebView2`に保存します。初期化できない環境では既定ブラウザーを自動的に開き、診断情報を`%LOCALAPPDATA%\WireGuard MFA Client\webview.log`に記録します。
 
