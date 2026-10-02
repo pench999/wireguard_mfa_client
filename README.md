@@ -30,7 +30,7 @@ WebとAndroidはビルド可能な構成を維持しますが、VPNサービス�
 
 サーバーには`wireguard_webadmin_ja`のクライアントセッションAPIが必要です。サーバー側でマイグレーションを実行してください。
 
-Windowsインストーラーは、Microsoft Visual C++ Runtime、Microsoft Edge WebView2 Runtime、および未導入の場合に同梱した公式WireGuard for Windowsをサイレントインストールします。WebView2の導入にはMicrosoftのダウンロードサービスへの通信が必要です。トンネル登録は初回起動時の認証後に行うため、インストール時のconf指定や利用者指定はありません。
+Windowsインストーラーは、Microsoft Visual C++ Runtime、Microsoft Edge WebView2 Runtime Standalone Installer、および未導入の場合に同梱した公式WireGuard for Windowsをサイレントインストールします。WebView2 Runtimeの導入にセットアップ中の追加ダウンロードは不要です。トンネル登録は初回起動時の認証後に行うため、インストール時のconf指定や利用者指定はありません。
 
 WebView2のユーザーデータは`%LOCALAPPDATA%\WireGuard MFA Client\WebView2`に保存します。初期化できない環境では既定ブラウザーを自動的に開き、診断情報を`%LOCALAPPDATA%\WireGuard MFA Client\webview.log`に記録します。
 

@@ -16,8 +16,8 @@ $wireGuardMsi = Join-Path $projectRoot 'installer\prerequisites\wireguard-amd64-
 $wireGuardHash = '7BFED60AD61B785C914B38B61555A975488E1D3EC472DBFB2FCDF498FCA75242'
 $visualCppInstaller = Join-Path $projectRoot 'installer\prerequisites\vc_redist.x64.exe'
 $visualCppHash = 'CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B'
-$webViewBootstrapper = Join-Path $projectRoot 'installer\prerequisites\MicrosoftEdgeWebview2Setup.exe'
-$webViewBootstrapperHash = '48A7B31419A8EB4FFFDC7B6A02F6B4DFDA60687FC897116BE15370E10C2B66A7'
+$webViewInstaller = Join-Path $projectRoot 'installer\prerequisites\MicrosoftEdgeWebView2RuntimeInstallerX64.exe'
+$webViewInstallerHash = 'F6DF8E4BC857786FF641CD01DA1449169EAF8236C936CED485EA61685BA4DA40'
 
 if (-not (Test-Path -LiteralPath $wireGuardMsi -PathType Leaf)) {
     throw "WireGuard MSIが見つかりません: $wireGuardMsi"
@@ -45,17 +45,17 @@ if ($visualCppSignature.Status -ne 'Valid' -or
     throw "Visual C++ Runtimeの署名が無効です: $($visualCppSignature.Status)"
 }
 
-if (-not (Test-Path -LiteralPath $webViewBootstrapper -PathType Leaf)) {
-    throw "WebView2 Bootstrapperが見つかりません: $webViewBootstrapper"
+if (-not (Test-Path -LiteralPath $webViewInstaller -PathType Leaf)) {
+    throw "WebView2 Standalone Installerが見つかりません: $webViewInstaller"
 }
-$actualWebViewHash = (Get-FileHash -LiteralPath $webViewBootstrapper -Algorithm SHA256).Hash
-if ($actualWebViewHash -ne $webViewBootstrapperHash) {
-    throw "WebView2 BootstrapperのSHA-256が一致しません: $actualWebViewHash"
+$actualWebViewHash = (Get-FileHash -LiteralPath $webViewInstaller -Algorithm SHA256).Hash
+if ($actualWebViewHash -ne $webViewInstallerHash) {
+    throw "WebView2 Standalone InstallerのSHA-256が一致しません: $actualWebViewHash"
 }
-$webViewSignature = Get-AuthenticodeSignature -LiteralPath $webViewBootstrapper
+$webViewSignature = Get-AuthenticodeSignature -LiteralPath $webViewInstaller
 if ($webViewSignature.Status -ne 'Valid' -or
     -not $webViewSignature.SignerCertificate.Subject.Contains('O=Microsoft Corporation')) {
-    throw "WebView2 Bootstrapperの署名が無効です: $($webViewSignature.Status)"
+    throw "WebView2 Standalone Installerの署名が無効です: $($webViewSignature.Status)"
 }
 
 if (-not $Flutter) {

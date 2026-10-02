@@ -50,7 +50,7 @@ Section "Install"
 
   InitPluginsDir
   File /oname=$PLUGINSDIR\vc_redist.x64.exe "prerequisites\vc_redist.x64.exe"
-  File /oname=$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe "prerequisites\MicrosoftEdgeWebview2Setup.exe"
+  File /oname=$PLUGINSDIR\MicrosoftEdgeWebView2RuntimeInstallerX64.exe "prerequisites\MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
   File /oname=$PLUGINSDIR\wireguard-amd64-1.1.1.msi "prerequisites\wireguard-amd64-1.1.1.msi"
 
   DetailPrint "Microsoft Visual C++ Runtimeを確認しています..."
@@ -65,7 +65,7 @@ Section "Install"
   ${EndIf}
 
   DetailPrint "Microsoft Edge WebView2 Runtimeを確認しています..."
-  nsExec::ExecToLog '$\"$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe$\" /silent /install'
+  nsExec::ExecToLog '$\"$PLUGINSDIR\MicrosoftEdgeWebView2RuntimeInstallerX64.exe$\" /silent /install'
   Pop $0
   ${If} $0 == 3010
     SetRebootFlag true
