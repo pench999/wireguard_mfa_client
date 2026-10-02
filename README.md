@@ -32,6 +32,8 @@ WebとAndroidはビルド可能な構成を維持しますが、VPNサービス�
 
 Windowsインストーラーは、Microsoft Visual C++ Runtimeと、未導入の場合に同梱した公式WireGuard for Windowsをサイレントインストールします。トンネル登録は初回起動時の認証後に行うため、インストール時のconf指定や利用者指定はありません。
 
+WebView2のユーザーデータは`%LOCALAPPDATA%\WireGuard MFA Client\WebView2`に保存します。初期化できない環境では既定ブラウザーを自動的に開き、診断情報を`%LOCALAPPDATA%\WireGuard MFA Client\webview.log`に記録します。
+
 HTTPS API通信はOSの信頼済み証明書に加え、Let’s Encrypt公式のISRG Root X1/X2を信頼アンカーとして同梱します。証明書検証の無効化は行いません。
 
 ## 開発環境

@@ -56,12 +56,28 @@ class _MfaAuthDialogState extends State<_MfaAuthDialog> {
       _setError('アプリ内認証はWindows版で利用できます。');
       return;
     }
+    String? version;
     try {
-      final version = await WebviewController.getWebViewVersion();
+      version = await WebviewController.getWebViewVersion();
       if (version == null) {
-        _setError('Microsoft Edge WebView2 Runtimeが見つかりません。');
+        await _fallBackToExternalBrowser(
+          'Microsoft Edge WebView2 Runtimeが見つかりません。',
+        );
         return;
       }
+      final localAppData = Platform.environment['LOCALAPPDATA'];
+      if (localAppData == null || localAppData.trim().isEmpty) {
+        await _fallBackToExternalBrowser('WebView2の保存先を確認できません。');
+        return;
+      }
+      final userDataDirectory = Directory(
+        '$localAppData${Platform.pathSeparator}WireGuard MFA Client'
+        '${Platform.pathSeparator}WebView2',
+      );
+      await userDataDirectory.create(recursive: true);
+      await WebviewController.initializeEnvironment(
+        userDataPath: userDataDirectory.path,
+      );
       final controller = WebviewController();
       await controller.initialize();
       await controller.setPopupWindowPolicy(WebviewPopupWindowPolicy.deny);
@@ -89,10 +105,56 @@ class _MfaAuthDialogState extends State<_MfaAuthDialog> {
       _controller = controller;
       await controller.loadUrl(widget.authenticationUrl.toString());
       if (mounted) setState(() {});
-    } on PlatformException {
-      _setError('WebView2を初期化できませんでした。');
+    } on PlatformException catch (error) {
+      await _writeInitializationError(version, error.code, error.message);
+      await _fallBackToExternalBrowser('WebView2を初期化できませんでした。');
+    } catch (error) {
+      await _writeInitializationError(
+        version,
+        error.runtimeType.toString(),
+        '$error',
+      );
+      await _fallBackToExternalBrowser('アプリ内認証を開始できませんでした。');
+    }
+  }
+
+  Future<void> _fallBackToExternalBrowser(String reason) async {
+    if (!mounted) return;
+    final opened = await launchUrl(
+      widget.authenticationUrl,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!mounted) return;
+    if (opened) {
+      Navigator.of(context).pop(MfaAuthDialogResult.externalBrowser);
+    } else {
+      _setError('$reason\n既定ブラウザーも開けませんでした。');
+    }
+  }
+
+  Future<void> _writeInitializationError(
+    String? version,
+    String code,
+    String? message,
+  ) async {
+    try {
+      final localAppData = Platform.environment['LOCALAPPDATA'];
+      if (localAppData == null || localAppData.trim().isEmpty) return;
+      final logDirectory = Directory(
+        '$localAppData${Platform.pathSeparator}WireGuard MFA Client',
+      );
+      await logDirectory.create(recursive: true);
+      final log = File(
+        '${logDirectory.path}${Platform.pathSeparator}webview.log',
+      );
+      await log.writeAsString(
+        '${DateTime.now().toIso8601String()} '
+        'version=${version ?? 'not-found'} code=$code message=${message ?? ''}\r\n',
+        mode: FileMode.append,
+        flush: true,
+      );
     } catch (_) {
-      _setError('アプリ内認証を開始できませんでした。');
+      // Browser fallback must still proceed when diagnostic logging fails.
     }
   }
 
