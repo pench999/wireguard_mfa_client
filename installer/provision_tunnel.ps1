@@ -39,6 +39,24 @@ function Grant-TunnelServiceControl {
     if ($LASTEXITCODE -ne 0) { throw "Unable to update service ACL: $($result -join ' ')" }
 }
 
+function Stop-TunnelService {
+    param([Parameter(Mandatory = $true)][string]$ServiceName)
+
+    Set-Service -Name $ServiceName -StartupType Manual
+    $lastStopOutput = @()
+    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+        $service = Get-Service -Name $ServiceName -ErrorAction Stop
+        if ($service.Status -eq 'Stopped') { return }
+        if ($service.Status -notin @('StartPending', 'StopPending')) {
+            $lastStopOutput = & "$env:SystemRoot\System32\sc.exe" stop $ServiceName 2>&1
+        }
+        Start-Sleep -Milliseconds 500
+    }
+
+    $service = Get-Service -Name $ServiceName -ErrorAction Stop
+    throw "WireGuard tunnel service did not stop ($($service.Status)): $ServiceName $($lastStopOutput -join ' ')"
+}
+
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -77,8 +95,7 @@ try {
     if (-not (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)) {
         throw "WireGuard tunnel installation failed with exit code $($process.ExitCode)."
     }
-    Set-Service -Name $serviceName -StartupType Manual
-    & "$env:SystemRoot\System32\sc.exe" stop $serviceName | Out-Null
+    Stop-TunnelService -ServiceName $serviceName
     Grant-TunnelServiceControl -ServiceName $serviceName -AccountName $TunnelUser
     Write-Output "PROVISION_COMPLETED=$serviceName"
 } catch {
