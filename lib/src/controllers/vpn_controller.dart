@@ -263,6 +263,7 @@ class VpnController extends ChangeNotifier {
   };
 
   String _messageForTunnelError(TunnelException error) => switch (error.code) {
+    'vpn_permission_denied' => 'AndroidのVPN利用許可がキャンセルされました。再接続して許可してください。',
     'service_start_failed' => 'WireGuardサービスを開始できません。権限とサービス設定を確認してください。',
     'service_stop_failed' => 'WireGuardサービスを停止できません。',
     'service_start_timeout' => 'WireGuardサービスの起動確認がタイムアウトしました。',

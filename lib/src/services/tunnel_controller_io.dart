@@ -1,10 +1,44 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
+
 import 'tunnel_controller_base.dart';
 
 export 'tunnel_controller_base.dart';
 
-TunnelController createTunnelController() => const WindowsTunnelController();
+TunnelController createTunnelController() => Platform.isAndroid
+    ? const AndroidTunnelController()
+    : const WindowsTunnelController();
+
+class AndroidTunnelController implements TunnelController {
+  const AndroidTunnelController();
+  static const _channel = MethodChannel('jp.co.fairway.wgmfa/tunnel');
+  @override
+  bool get isSupported => Platform.isAndroid;
+  @override
+  Future<TunnelState> getState(String tunnelName) async {
+    final state = await _channel.invokeMethod<String>('state', tunnelName);
+    return switch (state) {
+      'running' => TunnelState.running,
+      'stopped' => TunnelState.stopped,
+      'notInstalled' => TunnelState.notInstalled,
+      _ => TunnelState.unknown,
+    };
+  }
+
+  Future<void> _operate(String operation, String name) async {
+    try {
+      await _channel.invokeMethod<void>(operation, name);
+    } on PlatformException catch (error) {
+      throw TunnelException(error.code, error.message ?? '');
+    }
+  }
+
+  @override
+  Future<void> start(String tunnelName) => _operate('start', tunnelName);
+  @override
+  Future<void> stop(String tunnelName) => _operate('stop', tunnelName);
+}
 
 class WindowsTunnelController implements TunnelController {
   const WindowsTunnelController();

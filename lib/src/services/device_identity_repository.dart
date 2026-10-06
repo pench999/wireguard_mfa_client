@@ -33,6 +33,7 @@ class SecureDeviceIdentityRepository implements DeviceIdentityRepository {
   }
 
   String _deviceName() {
+    if (Platform.isAndroid) return 'Android device';
     final hostname = Platform.localHostname.trim();
     return hostname.isEmpty ? 'Windows device' : hostname;
   }

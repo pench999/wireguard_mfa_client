@@ -1,7 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
+
 Future<void> provisionTunnel(String tunnelName, String config) async {
+  if (Platform.isAndroid) {
+    await const MethodChannel(
+      'jp.co.fairway.wgmfa/tunnel',
+    ).invokeMethod<void>('provision', {'name': tunnelName, 'config': config});
+    return;
+  }
   if (!Platform.isWindows) {
     throw UnsupportedError('Tunnel provisioning is only available on Windows.');
   }

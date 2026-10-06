@@ -22,7 +22,16 @@ bool isSameOrigin(Uri expected, Uri candidate) {
 Future<MfaAuthDialogResult?> showMfaAuthDialog(
   BuildContext context,
   Uri authenticationUrl,
-) {
+) async {
+  if (Platform.isAndroid) {
+    final opened = await launchUrl(
+      authenticationUrl,
+      mode: LaunchMode.externalApplication,
+    );
+    return opened
+        ? MfaAuthDialogResult.externalBrowser
+        : MfaAuthDialogResult.cancelled;
+  }
   return showDialog<MfaAuthDialogResult>(
     context: context,
     barrierDismissible: false,
