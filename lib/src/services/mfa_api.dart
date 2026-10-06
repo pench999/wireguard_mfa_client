@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:http/http.dart' as http;
 
 import '../models/mfa_session.dart';
@@ -15,9 +17,23 @@ class MfaApiException implements Exception {
 }
 
 class MfaApi {
-  MfaApi({http.Client? client}) : _client = client ?? http.Client();
+  MfaApi({http.Client? client, bool? requestAppReturn})
+    : _client = client ?? http.Client(),
+      _requestAppReturn =
+          requestAppReturn ??
+          (!kIsWeb && defaultTargetPlatform == TargetPlatform.android);
 
   final http.Client _client;
+  final bool _requestAppReturn;
+
+  Uri _browserReturnUrl(Uri uri) => _requestAppReturn
+      ? uri.replace(
+          queryParameters: <String, dynamic>{
+            ...uri.queryParametersAll,
+            'return_to_app': 'android',
+          },
+        )
+      : uri;
 
   Future<http.Response> _getStatusResponse(Uri uri, String token) async {
     for (var attempt = 0; attempt < 3; attempt++) {
@@ -57,7 +73,9 @@ class MfaApi {
         response.statusCode,
       );
     }
-    final returnedUri = Uri.parse(data['browser_url'] as String);
+    final returnedUri = _browserReturnUrl(
+      Uri.parse(data['browser_url'] as String),
+    );
     return ProvisioningSession(
       id: data['session_id'] as String,
       browserUrl: serverUri.resolveUri(
@@ -144,7 +162,9 @@ class MfaApi {
         response.statusCode,
       );
     }
-    final browserUri = Uri.parse(data['browser_url'] as String);
+    final browserUri = _browserReturnUrl(
+      Uri.parse(data['browser_url'] as String),
+    );
     final browserUrl = serverUri.resolveUri(
       Uri(
         path: browserUri.path,

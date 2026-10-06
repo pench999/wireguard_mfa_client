@@ -7,7 +7,9 @@ It embeds the official WireGuard tunnel library (1.0.20260102).
 
 - Android 8.0 (API 26) or newer; initial test device: Pixel 6 Pro.
 - Existing WebAdmin provisioning and MFA client-session APIs.
-- External browser authentication. Return to the client after browser MFA.
+- External browser authentication. Compatible servers automatically attempt to
+  return to the client after MFA; an app-return button remains available if the
+  browser requires a user gesture. Older servers require a manual return.
 - Encrypted configuration in app-private, non-backup storage; AES-GCM key in Android Keystore.
 - Android VPN permission is requested on first connection, not during provisioning.
 - A foreground notification maintains the app process while connected.
@@ -43,3 +45,7 @@ device per user. A separately installed WireGuard app is not required.
 Native integration, DNS, service lifecycle, screen-off, and the Android 17 VPN
 permission behavior require real-device acceptance testing. Dart unit tests do
 not prove these behaviors. Android Always-on VPN is outside this first version.
+
+The fixed `wireguardmfa://auth/complete` link only foregrounds the existing app
+task. It does not carry credentials or grant VPN access. Polling verifies the
+current authenticated session before configuration retrieval or VPN startup.

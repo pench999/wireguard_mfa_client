@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -9,6 +11,8 @@ import 'package:wireguard_mfa_client/src/models/device_identity.dart';
 import 'package:wireguard_mfa_client/src/services/mfa_api.dart';
 
 void main() {
+  setUp(() => debugDefaultTargetPlatformOverride = TargetPlatform.windows);
+  tearDown(() => debugDefaultTargetPlatformOverride = null);
   const device = DeviceIdentity(
     id: '123e4567-e89b-42d3-a456-426614174111',
     token: 'device-token-abcdefghijklmnopqrstuvwxyz123456',
