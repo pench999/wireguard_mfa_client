@@ -11,6 +11,7 @@ import 'package:window_manager/window_manager.dart';
 import '../controllers/vpn_controller.dart';
 import '../models/app_settings.dart';
 import '../services/mfa_api.dart';
+import '../services/authentication_polling.dart';
 import '../services/device_identity_repository.dart';
 import '../services/power_event_service.dart';
 import '../services/settings_repository.dart';
@@ -262,6 +263,7 @@ class _HomeScreenState extends State<HomeScreen>
       );
       if (!mounted) return;
       var cancelled = false;
+      var authorized = false;
       unawaited(
         showMfaAuthDialog(context, session.browserUrl).then((result) {
           if (result == MfaAuthDialogResult.cancelled) cancelled = true;
@@ -270,12 +272,18 @@ class _HomeScreenState extends State<HomeScreen>
       while (DateTime.now().isBefore(session.expiresAt)) {
         await Future<void>.delayed(const Duration(seconds: 2));
         if (cancelled) throw StateError('初期設定がキャンセルされました。');
+        if (!mounted) return;
+        if (!canPollAuthentication) continue;
         final state = await _mfaApi.getProvisioningStatus(serverUri, session);
-        if (state.status == 'authorized') break;
+        if (state.status == 'authorized') {
+          authorized = true;
+          break;
+        }
         if (state.status == 'failed' || state.status == 'expired') {
           throw StateError('サーバーで初期設定を完了できませんでした。');
         }
       }
+      if (!authorized) throw StateError('初期設定の認証時間が切れました。もう一度認証してください。');
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop(MfaAuthDialogResult.completed);
       }
@@ -305,7 +313,11 @@ class _HomeScreenState extends State<HomeScreen>
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('初期設定に失敗しました'),
-          content: Text(error.toString().replaceFirst('Bad state: ', '')),
+          content: Text(
+            error is MfaApiException && error.code == 'network_unavailable'
+                ? 'サーバーの名前解決または通信に失敗しました。ネットワークとDNS設定を確認して再試行してください。'
+                : error.toString().replaceFirst('Bad state: ', ''),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),

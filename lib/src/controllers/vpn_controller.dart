@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/app_settings.dart';
 import '../models/mfa_session.dart';
 import '../services/mfa_api.dart';
+import '../services/authentication_polling.dart';
 import '../services/device_identity_repository.dart';
 import '../services/tunnel_controller.dart';
 
@@ -119,6 +120,7 @@ class VpnController extends ChangeNotifier {
         if (_cancelRequested) {
           return;
         }
+        if (!canPollAuthentication) continue;
         final state = await _api.getStatus(serverUri, _session!);
         switch (state.status) {
           case MfaSessionStatus.pending:
@@ -254,6 +256,7 @@ class VpnController extends ChangeNotifier {
     'wireguard_reload_failed' ||
     'peer_unlock_failed' => 'MFAは成功しましたが、サーバーでWireGuardを有効化できませんでした。',
     'unauthorized' => '認証セッションを確認できませんでした。',
+    'network_unavailable' => 'サーバーへ接続できません。ネットワークとDNS設定を確認して再試行してください。',
     'invalid_device' => '端末情報を作成できませんでした。アプリを再起動してください。',
     'device_required' => 'このユーザーは登録済み端末からのみ接続できます。',
     'device_unauthorized' => 'この端末の登録情報を確認できません。管理者に再登録を依頼してください。',

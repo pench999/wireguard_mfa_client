@@ -19,6 +19,22 @@ class MfaApi {
 
   final http.Client _client;
 
+  Future<http.Response> _getStatusResponse(Uri uri, String token) async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await _client
+            .get(uri, headers: {'Authorization': 'Bearer $token'})
+            .timeout(const Duration(seconds: 12));
+      } on http.ClientException {
+        if (attempt == 2) throw const MfaApiException('network_unavailable');
+      } on TimeoutException {
+        if (attempt == 2) rethrow;
+      }
+      await Future<void>.delayed(Duration(milliseconds: 300 * (attempt + 1)));
+    }
+    throw const MfaApiException('network_unavailable');
+  }
+
   Future<ProvisioningSession> createProvisioningSession(
     Uri serverUri,
     DeviceIdentity device,
@@ -59,14 +75,10 @@ class MfaApi {
     Uri serverUri,
     ProvisioningSession session,
   ) async {
-    final response = await _client
-        .get(
-          serverUri.resolve(
-            '/api/client/v1/provisioning/${session.id}/status/',
-          ),
-          headers: {'Authorization': 'Bearer ${session.pollToken}'},
-        )
-        .timeout(const Duration(seconds: 12));
+    final response = await _getStatusResponse(
+      serverUri.resolve('/api/client/v1/provisioning/${session.id}/status/'),
+      session.pollToken,
+    );
     final data = _decode(response);
     if (response.statusCode != 200) {
       throw MfaApiException(
@@ -149,12 +161,10 @@ class MfaApi {
   }
 
   Future<MfaSessionState> getStatus(Uri serverUri, MfaSession session) async {
-    final response = await _client
-        .get(
-          serverUri.resolve('/api/client/v1/sessions/${session.id}/status/'),
-          headers: {'Authorization': 'Bearer ${session.pollToken}'},
-        )
-        .timeout(const Duration(seconds: 12));
+    final response = await _getStatusResponse(
+      serverUri.resolve('/api/client/v1/sessions/${session.id}/status/'),
+      session.pollToken,
+    );
     final data = _decode(response);
     if (response.statusCode != 200) {
       throw MfaApiException(
