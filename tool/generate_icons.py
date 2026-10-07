@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -84,6 +85,12 @@ def save_ico(path: Path, state: str, tray: bool = False):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--android-only', action='store_true')
+    args = parser.parse_args()
+    if args.android_only:
+        save_android_icons()
+        return
     RESOURCE_DIR.mkdir(parents=True, exist_ok=True)
     TRAY_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -93,6 +100,27 @@ def main():
 
     preview = render(512, "connected")
     preview.save(RESOURCE_DIR / "authentication_gate_preview.png")
+
+
+def save_android_icons():
+    resource_dir = ROOT / 'android' / 'app' / 'src' / 'main' / 'res'
+    gate = render(512, 'connected')
+    gate = gate.crop(gate.getbbox())
+    for density, factor in [('mdpi', 1), ('hdpi', 1.5), ('xhdpi', 2), ('xxhdpi', 3), ('xxxhdpi', 4)]:
+        directory = resource_dir / ('mipmap-' + density)
+        directory.mkdir(parents=True, exist_ok=True)
+        foreground_size = round(108 * factor)
+        foreground = Image.new('RGBA', (foreground_size, foreground_size))
+        symbol = gate.copy()
+        symbol.thumbnail((round(52 * factor), round(52 * factor)), Image.Resampling.LANCZOS)
+        foreground.alpha_composite(symbol, ((foreground_size - symbol.width) // 2, (foreground_size - symbol.height) // 2))
+        foreground.save(directory / 'ic_launcher_foreground.png')
+        legacy_size = round(48 * factor)
+        legacy = Image.new('RGBA', (legacy_size, legacy_size), '#FFFFFF')
+        symbol = gate.copy()
+        symbol.thumbnail((round(32 * factor), round(32 * factor)), Image.Resampling.LANCZOS)
+        legacy.alpha_composite(symbol, ((legacy_size - symbol.width) // 2, (legacy_size - symbol.height) // 2))
+        legacy.save(directory / 'ic_launcher.png')
 
 
 if __name__ == "__main__":
