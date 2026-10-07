@@ -4,6 +4,16 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val releaseSigning = listOf("WGMFA_KEYSTORE", "WGMFA_STORE_PASSWORD", "WGMFA_KEY_ALIAS", "WGMFA_KEY_PASSWORD")
+    .associateWith { System.getenv(it) }
+val hasReleaseSigning = releaseSigning.values.all { !it.isNullOrBlank() }
+
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.project == project && it.name.contains("release", ignoreCase = true) }) {
+        check(hasReleaseSigning) { "Release signing required: use tool/build_android_release.ps1." }
+    }
+}
+
 android {
     namespace = "jp.co.fairway.wireguard_mfa_client"
     compileSdk = flutter.compileSdkVersion
@@ -29,11 +39,21 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseSigning.getValue("WGMFA_KEYSTORE")!!)
+                storePassword = releaseSigning.getValue("WGMFA_STORE_PASSWORD")
+                keyAlias = releaseSigning.getValue("WGMFA_KEY_ALIAS")
+                keyPassword = releaseSigning.getValue("WGMFA_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Credentials are supplied only by the release build process.
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
         }
     }
 }
