@@ -46,6 +46,10 @@ class VpnController extends ChangeNotifier {
   String message = '接続できます';
   String? errorMessage;
   DateTime? unlockedUntil;
+  String? lockMode;
+  Timer? _connectionMonitor;
+  bool _checkingConnection = false;
+  int _connectionEpoch = 0;
   MfaSession? _session;
   bool _cancelRequested = false;
 
@@ -59,6 +63,7 @@ class VpnController extends ChangeNotifier {
   bool get isConnected => phase == ConnectionPhase.connected;
 
   Future<bool> initialize(AppSettings settings) async {
+    _connectionEpoch++;
     if (!_tunnel.isSupported) {
       phase = ConnectionPhase.unsupported;
       message = 'このプラットフォームではVPN制御を利用できません';
@@ -69,14 +74,27 @@ class VpnController extends ChangeNotifier {
     final state = await _tunnel.getState(settings.tunnelName);
     errorMessage = null;
     if (state == TunnelState.running) {
+      final tunnel = _tunnel;
+      if (tunnel is AuthorizedTunnelController) {
+        unlockedUntil = await (tunnel as AuthorizedTunnelController)
+            .getAuthorizationDeadline(settings.tunnelName);
+        lockMode = unlockedUntil == null ? 'disconnect' : 'time';
+      }
       phase = ConnectionPhase.connected;
       message = 'WireGuard接続済み';
+      _connectionMonitor?.cancel();
+      _connectionMonitor = Timer.periodic(const Duration(seconds: 2), (_) {
+        unawaited(refreshConnection(settings));
+      });
     } else if (state == TunnelState.notInstalled) {
       _setError('WireGuardTunnel\$${settings.tunnelName}を事前にインストールしてください。');
       return false;
     } else {
+      _connectionMonitor?.cancel();
       phase = ConnectionPhase.idle;
-      message = '接続できます';
+      message = state == TunnelState.expired
+          ? '認証期限が切れました。再認証してください'
+          : '接続できます';
     }
     notifyListeners();
     return true;
@@ -95,8 +113,11 @@ class VpnController extends ChangeNotifier {
     }
 
     _cancelRequested = false;
+    _connectionEpoch++;
     errorMessage = null;
     unlockedUntil = null;
+    lockMode = null;
+    _connectionMonitor?.cancel();
     try {
       phase = ConnectionPhase.waitingForMfa;
       message = 'MFA認証を開始しています';
@@ -127,12 +148,27 @@ class VpnController extends ChangeNotifier {
           case MfaSessionStatus.authorizing:
             continue;
           case MfaSessionStatus.unlocked:
-            unlockedUntil = state.unlockedUntil;
+            lockMode = state.lockMode;
+            unlockedUntil = lockMode == 'disconnect'
+                ? null
+                : state.unlockedUntil;
+            if (unlockedUntil != null &&
+                !DateTime.now().isBefore(unlockedUntil!)) {
+              throw const MfaApiException('session_expired');
+            }
             phase = ConnectionPhase.startingTunnel;
             message = 'WireGuardを起動しています';
             notifyListeners();
             try {
-              await _tunnel.start(settings.tunnelName.trim());
+              final tunnel = _tunnel;
+              if (tunnel is AuthorizedTunnelController) {
+                await (tunnel as AuthorizedTunnelController).startAuthorized(
+                  settings.tunnelName.trim(),
+                  unlockedUntil,
+                );
+              } else {
+                await tunnel.start(settings.tunnelName.trim());
+              }
             } on TunnelException {
               try {
                 await _api.lock(serverUri, _session!);
@@ -143,6 +179,11 @@ class VpnController extends ChangeNotifier {
             }
             phase = ConnectionPhase.connected;
             message = 'WireGuard接続済み';
+            _connectionMonitor = Timer.periodic(const Duration(seconds: 2), (
+              _,
+            ) {
+              unawaited(refreshConnection(settings));
+            });
             notifyListeners();
             return;
           case MfaSessionStatus.failed:
@@ -173,11 +214,50 @@ class VpnController extends ChangeNotifier {
     await _disconnect(settings, messageAfterStop: '切断しました');
   }
 
+  Future<void> refreshConnection(AppSettings settings) async {
+    if (!isConnected || _checkingConnection) return;
+    _checkingConnection = true;
+    final epoch = _connectionEpoch;
+    try {
+      final expired =
+          unlockedUntil != null && !DateTime.now().isBefore(unlockedUntil!);
+      final state = await _tunnel.getState(settings.tunnelName.trim());
+      if (!isConnected || epoch != _connectionEpoch) return;
+      if (expired) {
+        // Stop locally without waiting for an unreachable server's lock API.
+        await _tunnel.stop(settings.tunnelName.trim());
+        if (epoch != _connectionEpoch) return;
+      }
+      if (expired ||
+          state == TunnelState.expired ||
+          state == TunnelState.stopped) {
+        _connectionMonitor?.cancel();
+        phase = ConnectionPhase.idle;
+        message = expired || state == TunnelState.expired
+            ? '認証期限が切れました。再認証してください'
+            : 'VPNは切断されています。再接続にはMFA認証が必要です';
+        unlockedUntil = null;
+        lockMode = null;
+        _session = null;
+        notifyListeners();
+      }
+    } on TunnelException catch (error) {
+      if (epoch == _connectionEpoch) {
+        _connectionMonitor?.cancel();
+        _setError(_messageForTunnelError(error));
+      }
+    } finally {
+      _checkingConnection = false;
+    }
+  }
+
   Future<void> handleSuspend(AppSettings settings) async {
     await _disconnect(settings, messageAfterStop: 'スリープのため切断しました');
   }
 
   Future<void> handleResume(AppSettings settings) async {
+    _connectionEpoch++;
+    _connectionMonitor?.cancel();
     _cancelRequested = true;
     phase = ConnectionPhase.disconnecting;
     message = '復帰後の接続状態を確認しています';
@@ -195,6 +275,7 @@ class VpnController extends ChangeNotifier {
       unlockedUntil = null;
       phase = ConnectionPhase.idle;
       message = '復帰しました。再接続にはMFA認証が必要です';
+      lockMode = null;
       notifyListeners();
     } on TunnelException catch (error) {
       _setError(_messageForTunnelError(error));
@@ -206,6 +287,8 @@ class VpnController extends ChangeNotifier {
     required String messageAfterStop,
   }) async {
     _cancelRequested = true;
+    _connectionEpoch++;
+    _connectionMonitor?.cancel();
     phase = ConnectionPhase.disconnecting;
     message = '切断しています';
     errorMessage = null;
@@ -227,6 +310,7 @@ class VpnController extends ChangeNotifier {
       unlockedUntil = null;
       phase = ConnectionPhase.idle;
       message = lockWarning ?? messageAfterStop;
+      lockMode = null;
       errorMessage = lockWarning;
       notifyListeners();
     } on TunnelException catch (error) {
@@ -276,6 +360,8 @@ class VpnController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _connectionEpoch++;
+    _connectionMonitor?.cancel();
     _cancelRequested = true;
     _api.close();
     super.dispose();

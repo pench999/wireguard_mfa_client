@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wireguard_mfa_client/src/controllers/vpn_controller.dart';
 import 'package:wireguard_mfa_client/src/models/app_settings.dart';
 import 'package:wireguard_mfa_client/src/models/device_identity.dart';
+import 'package:wireguard_mfa_client/src/models/mfa_session.dart';
 import 'package:wireguard_mfa_client/src/services/device_identity_repository.dart';
 import 'package:wireguard_mfa_client/src/services/mfa_api.dart';
 import 'package:wireguard_mfa_client/src/services/tunnel_controller_base.dart';
@@ -13,6 +14,48 @@ const _settings = AppSettings(
 );
 
 void main() {
+  test(
+    'expired authorization stops local tunnel without a server request',
+    () async {
+      final tunnel = _FakeTunnel(TunnelState.running);
+      final controller = _controller(tunnel);
+      await controller.initialize(_settings);
+      controller.lockMode = 'time';
+      controller.unlockedUntil = DateTime.now().subtract(
+        const Duration(seconds: 1),
+      );
+      await controller.refreshConnection(_settings);
+      expect(tunnel.state, TunnelState.stopped);
+      expect(controller.isConnected, isFalse);
+      expect(controller.message, contains('認証期限が切れました'));
+      controller.dispose();
+    },
+  );
+
+  test('disconnect lock mode ignores the server sentinel date', () async {
+    final tunnel = _FakeTunnel(TunnelState.stopped);
+    final controller = VpnController(
+      api: _DisconnectApi(),
+      tunnel: tunnel,
+      deviceIdentityRepository: _FakeDeviceIdentityRepository(),
+      browserLauncher: (_) async => true,
+    );
+    await controller.connect(_settings);
+    expect(controller.isConnected, isTrue);
+    expect(controller.lockMode, 'disconnect');
+    expect(controller.unlockedUntil, isNull);
+    await controller.refreshConnection(_settings);
+    expect(tunnel.stopCalls, 0);
+    controller.dispose();
+  });
+
+  test('native expiry is reflected in the connection status', () async {
+    final controller = _controller(_FakeTunnel(TunnelState.expired));
+    await controller.initialize(_settings);
+    expect(controller.isConnected, isFalse);
+    expect(controller.message, contains('認証期限が切れました'));
+    controller.dispose();
+  });
   test('initialize requires provisioning when the tunnel is missing', () async {
     final controller = _controller(_FakeTunnel(TunnelState.notInstalled));
 
@@ -101,4 +144,26 @@ class _FakeDeviceIdentityRepository implements DeviceIdentityRepository {
     token: 'test-token',
     name: 'TEST-PC',
   );
+}
+
+class _DisconnectApi extends MfaApi {
+  @override
+  Future<MfaSession> createSession(
+    Uri serverUri,
+    String peerUuid,
+    DeviceIdentity device,
+  ) async => MfaSession(
+    id: 'test-session',
+    browserUrl: serverUri,
+    pollToken: 'test-token',
+    expiresAt: DateTime.now().add(const Duration(minutes: 5)),
+  );
+  @override
+  Future<MfaSessionState> getStatus(Uri serverUri, MfaSession session) async =>
+      MfaSessionState(
+        status: MfaSessionStatus.unlocked,
+        expiresAt: session.expiresAt,
+        lockMode: 'disconnect',
+        unlockedUntil: DateTime.now().add(const Duration(days: 3650)),
+      );
 }

@@ -27,7 +27,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with TrayListener, WindowListener {
+    with TrayListener, WindowListener, WidgetsBindingObserver {
   final _settingsRepository = SettingsRepository();
   final _mfaApi = MfaApi();
   final _deviceIdentityRepository = SecureDeviceIdentityRepository();
@@ -45,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller = VpnController(
       api: _mfaApi,
       tunnel: createTunnelController(),
@@ -125,6 +126,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _powerEvents.stop();
     if (Platform.isWindows) {
       windowManager.removeListener(this);
@@ -137,6 +139,13 @@ class _HomeScreenState extends State<HomeScreen>
       ..removeListener(_refresh)
       ..dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && Platform.isAndroid) {
+      unawaited(_controller.refreshConnection(_settings));
+    }
   }
 
   Future<void> _updateTrayMenu() async {
@@ -379,6 +388,7 @@ class _HomeScreenState extends State<HomeScreen>
                     _ConnectionDetails(
                       settings: _settings,
                       unlockedUntil: _controller.unlockedUntil,
+                      lockMode: _controller.lockMode,
                     ),
                     if (_settings.serverUrl.startsWith('http://')) ...[
                       const SizedBox(height: 12),
@@ -463,10 +473,12 @@ class _ConnectionDetails extends StatelessWidget {
   const _ConnectionDetails({
     required this.settings,
     required this.unlockedUntil,
+    this.lockMode,
   });
 
   final AppSettings settings;
   final DateTime? unlockedUntil;
+  final String? lockMode;
 
   @override
   Widget build(BuildContext context) {
@@ -484,11 +496,13 @@ class _ConnectionDetails extends StatelessWidget {
               label: 'トンネル',
               value: settings.tunnelName.isEmpty ? '未設定' : settings.tunnelName,
             ),
-            if (unlockedUntil != null) ...[
+            if (lockMode == 'disconnect' || unlockedUntil != null) ...[
               const Divider(height: 24),
               _DetailRow(
                 label: 'MFA有効期限',
-                value: unlockedUntil!.toLocal().toString().substring(0, 16),
+                value: lockMode == 'disconnect'
+                    ? '切断検知まで有効'
+                    : unlockedUntil!.toLocal().toString().substring(0, 16),
               ),
             ],
           ],

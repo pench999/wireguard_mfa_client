@@ -194,6 +194,7 @@ class MfaApi {
     }
     return MfaSessionState(
       status: MfaSessionStatus.parse(data['status']?.toString() ?? ''),
+      lockMode: data['lock_mode']?.toString() ?? 'time',
       expiresAt: DateTime.parse(data['expires_at'] as String),
       unlockedUntil: data['unlocked_until'] == null
           ? null

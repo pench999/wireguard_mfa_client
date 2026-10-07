@@ -10,7 +10,8 @@ TunnelController createTunnelController() => Platform.isAndroid
     ? const AndroidTunnelController()
     : const WindowsTunnelController();
 
-class AndroidTunnelController implements TunnelController {
+class AndroidTunnelController
+    implements TunnelController, AuthorizedTunnelController {
   const AndroidTunnelController();
   static const _channel = MethodChannel('jp.co.fairway.wgmfa/tunnel');
   @override
@@ -20,6 +21,7 @@ class AndroidTunnelController implements TunnelController {
     final state = await _channel.invokeMethod<String>('state', tunnelName);
     return switch (state) {
       'running' => TunnelState.running,
+      'expired' => TunnelState.expired,
       'stopped' => TunnelState.stopped,
       'notInstalled' => TunnelState.notInstalled,
       _ => TunnelState.unknown,
@@ -36,6 +38,24 @@ class AndroidTunnelController implements TunnelController {
 
   @override
   Future<void> start(String tunnelName) => _operate('start', tunnelName);
+  @override
+  Future<void> startAuthorized(String tunnelName, DateTime? expiresAt) async {
+    try {
+      await _channel.invokeMethod<void>('start', {
+        'name': tunnelName,
+        'expiresAt': expiresAt?.millisecondsSinceEpoch,
+      });
+    } on PlatformException catch (error) {
+      throw TunnelException(error.code, error.message ?? '');
+    }
+  }
+
+  @override
+  Future<DateTime?> getAuthorizationDeadline(String tunnelName) async {
+    final millis = await _channel.invokeMethod<int>('deadline', tunnelName);
+    return millis == null ? null : DateTime.fromMillisecondsSinceEpoch(millis);
+  }
+
   @override
   Future<void> stop(String tunnelName) => _operate('stop', tunnelName);
 }

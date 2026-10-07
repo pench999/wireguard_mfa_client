@@ -49,3 +49,18 @@ not prove these behaviors. Android Always-on VPN is outside this first version.
 The fixed `wireguardmfa://auth/complete` link only foregrounds the existing app
 task. It does not carry credentials or grant VPN access. Polling verifies the
 current authenticated session before configuration retrieval or VPN startup.
+
+## Authorization expiry
+
+The status API's `lock_mode` selects the behavior. `disconnect` displays an
+until-disconnection label, ignores the server's sentinel date, and schedules no
+local expiry. `time` passes the actual deadline to the native tunnel runtime.
+The foreground runtime checks a monotonic deadline and sets an idle-allowed
+wakeup alarm. Expiry stops the tunnel and its foreground notification without
+waiting for a server request. Returning to the app refreshes the connection state.
+Old connection callbacks cannot expire a newly authenticated connection.
+
+Android may defer the wakeup alarm in deep idle; the app does not request exact
+alarm access. Server-side expiry remains the security boundary. Validate both
+screen-on and screen-locked expiry, notification removal, VPN icon removal,
+re-authentication, and switching to another VPN on a physical device.

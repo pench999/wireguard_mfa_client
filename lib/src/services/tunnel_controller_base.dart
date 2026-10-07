@@ -1,4 +1,5 @@
 enum TunnelState {
+  expired,
   stopped,
   starting,
   running,
@@ -20,4 +21,9 @@ class TunnelException implements Exception {
 
   final String code;
   final String details;
+}
+
+abstract interface class AuthorizedTunnelController {
+  Future<void> startAuthorized(String tunnelName, DateTime? expiresAt);
+  Future<DateTime?> getAuthorizationDeadline(String tunnelName);
 }

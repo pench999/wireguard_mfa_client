@@ -43,4 +43,27 @@ void main() {
       ),
     );
   });
+
+  test('passes the expiry deadline to native Android', () async {
+    final deadline = DateTime.utc(2026, 10, 7, 12);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          expect(call.method, 'start');
+          expect(call.arguments, {
+            'name': 'android_peer',
+            'expiresAt': deadline.millisecondsSinceEpoch,
+          });
+          return null;
+        });
+    await controller.startAuthorized('android_peer', deadline);
+  });
+
+  test('disconnect lock mode passes no native deadline', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          expect((call.arguments as Map)['expiresAt'], isNull);
+          return null;
+        });
+    await controller.startAuthorized('android_peer', null);
+  });
 }

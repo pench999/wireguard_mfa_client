@@ -97,6 +97,7 @@ void main() {
     );
 
     expect(status.status, MfaSessionStatus.unlocked);
+    expect(status.lockMode, 'time');
     expect(status.unlockedUntil, DateTime.utc(2026, 9, 17, 3, 30));
     api.close();
   });
@@ -123,6 +124,31 @@ void main() {
     expect(
       session.browserUrl,
       Uri.parse('https://vpn.example.com/client/provision/token/'),
+    );
+    api.close();
+  });
+
+  test('parses disconnect lock mode from the server', () async {
+    final api = MfaApi(
+      client: MockClient(
+        (_) async => http.Response(
+          '{"status":"unlocked","lock_mode":"disconnect","expires_at":"2026-10-07T03:00:00Z","unlocked_until":"2036-10-04T03:00:00Z"}',
+          200,
+        ),
+      ),
+    );
+    final session = MfaSession(
+      id: 'test',
+      browserUrl: Uri.parse('https://vpn.example.com'),
+      pollToken: 'test-token',
+      expiresAt: DateTime.utc(2026, 10, 7),
+    );
+    expect(
+      (await api.getStatus(
+        Uri.parse('https://vpn.example.com'),
+        session,
+      )).lockMode,
+      'disconnect',
     );
     api.close();
   });

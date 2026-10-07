@@ -36,10 +36,12 @@ class MfaSessionState {
     required this.expiresAt,
     this.unlockedUntil,
     this.errorCode,
+    this.lockMode = 'time',
   });
 
   final MfaSessionStatus status;
   final DateTime expiresAt;
   final DateTime? unlockedUntil;
   final String? errorCode;
+  final String lockMode;
 }
