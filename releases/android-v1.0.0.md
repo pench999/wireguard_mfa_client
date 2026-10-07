@@ -1,6 +1,7 @@
 # WireGuard MFA Client Android 1.0.0
 
-Status: release candidate; signed-APK acceptance and signing-key backup required before distribution.
+Status: released on 2026-10-07. Signed-APK initial setup and VPN connectivity
+were confirmed by the operator; the release signing key and password were backed up.
 Version code: 22. Package: `jp.co.fairway.wireguard_mfa_client`.
 Windows release version remains unchanged.
 
@@ -32,7 +33,7 @@ Stop the VPN, uninstall the development APK, allow re-registration of the old
 registered device on the server, install the release APK, and provision again.
 MFA enrollment need not be reset solely because the APK signing key changed.
 
-## Final checks
+## Maintenance Checklist
 
 - Back up the release keystore AND a recoverable copy of its password.
 - Install the signed APK and provision, authenticate, connect, resolve DNS, disconnect.
