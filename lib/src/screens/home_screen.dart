@@ -113,7 +113,12 @@ class _HomeScreenState extends State<HomeScreen>
     _authDialogOpen = true;
     _closingAuthDialog = false;
     unawaited(
-      showMfaAuthDialog(context, authenticationUrl).then((result) {
+      showMfaAuthDialog(
+        context,
+        authenticationUrl,
+        newExternalAuthentication: () =>
+            _controller.replaceAuthenticationSession(_settings),
+      ).then((result) {
         _authDialogOpen = false;
         _closingAuthDialog = false;
         if (result == MfaAuthDialogResult.cancelled) {
@@ -266,15 +271,32 @@ class _HomeScreenState extends State<HomeScreen>
         serverUrl.endsWith('/') ? serverUrl : '$serverUrl/',
       );
       final device = await _deviceIdentityRepository.loadOrCreate();
-      final session = await _mfaApi.createProvisioningSession(
-        serverUri,
-        device,
-      );
+      var session = await _mfaApi.createProvisioningSession(serverUri, device);
       if (!mounted) return;
       var cancelled = false;
       var authorized = false;
+      var replacingAuthentication = false;
       unawaited(
-        showMfaAuthDialog(context, session.browserUrl).then((result) {
+        showMfaAuthDialog(
+          context,
+          session.browserUrl,
+          newExternalAuthentication: () async {
+            replacingAuthentication = true;
+            try {
+              final replacement = await _mfaApi.createProvisioningSession(
+                serverUri,
+                device,
+              );
+              if (!mounted || cancelled || authorized) {
+                throw StateError('初期設定の認証は終了しています。');
+              }
+              session = replacement;
+              return replacement.browserUrl;
+            } finally {
+              replacingAuthentication = false;
+            }
+          },
+        ).then((result) {
           if (result == MfaAuthDialogResult.cancelled) cancelled = true;
         }),
       );
@@ -282,8 +304,15 @@ class _HomeScreenState extends State<HomeScreen>
         await Future<void>.delayed(const Duration(seconds: 2));
         if (cancelled) throw StateError('初期設定がキャンセルされました。');
         if (!mounted) return;
-        if (!canPollAuthentication) continue;
-        final state = await _mfaApi.getProvisioningStatus(serverUri, session);
+        if (!canPollAuthentication || replacingAuthentication) continue;
+        final polledSession = session;
+        final state = await _mfaApi.getProvisioningStatus(
+          serverUri,
+          polledSession,
+        );
+        if (replacingAuthentication || !identical(polledSession, session)) {
+          continue;
+        }
         if (state.status == 'authorized') {
           authorized = true;
           break;

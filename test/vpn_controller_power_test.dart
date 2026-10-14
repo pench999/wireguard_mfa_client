@@ -14,6 +14,28 @@ const _settings = AppSettings(
 );
 
 void main() {
+  test('external browser replacement polls only the new session', () async {
+    final api = _ReplacingApi();
+    late VpnController controller;
+    controller = VpnController(
+      api: api,
+      tunnel: _FakeTunnel(TunnelState.stopped),
+      deviceIdentityRepository: _FakeDeviceIdentityRepository(),
+      browserLauncher: (original) async {
+        final replacement = await controller.replaceAuthenticationSession(
+          _settings,
+        );
+        expect(replacement, isNot(original));
+        return true;
+      },
+    );
+    await controller.connect(_settings);
+    expect(api.created, 2);
+    expect(api.polled, ['session-2']);
+    expect(controller.isConnected, isTrue);
+    controller.dispose();
+  });
+
   test(
     'expired authorization stops local tunnel without a server request',
     () async {
@@ -144,6 +166,32 @@ class _FakeDeviceIdentityRepository implements DeviceIdentityRepository {
     token: 'test-token',
     name: 'TEST-PC',
   );
+}
+
+class _ReplacingApi extends _DisconnectApi {
+  int created = 0;
+  final List<String> polled = [];
+
+  @override
+  Future<MfaSession> createSession(
+    Uri serverUri,
+    String peerUuid,
+    DeviceIdentity device,
+  ) async {
+    created++;
+    return MfaSession(
+      id: 'session-$created',
+      browserUrl: serverUri.resolve('/client/connect/token-$created/'),
+      pollToken: 'poll-$created',
+      expiresAt: DateTime.now().add(const Duration(minutes: 5)),
+    );
+  }
+
+  @override
+  Future<MfaSessionState> getStatus(Uri serverUri, MfaSession session) {
+    polled.add(session.id);
+    return super.getStatus(serverUri, session);
+  }
 }
 
 class _DisconnectApi extends MfaApi {
