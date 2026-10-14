@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter_windows/webview_flutter_windows.dart';
 
 enum MfaAuthDialogResult { completed, cancelled, externalBrowser }
+
+bool canDisplayRetryPage(WebErrorStatus status) =>
+    status == WebErrorStatus.unknown ||
+    status == WebErrorStatus.errorHttpInvalidServerResponse;
 
 bool isSameOrigin(Uri expected, Uri candidate) {
   int effectivePort(Uri uri) {
@@ -21,8 +26,9 @@ bool isSameOrigin(Uri expected, Uri candidate) {
 
 Future<MfaAuthDialogResult?> showMfaAuthDialog(
   BuildContext context,
-  Uri authenticationUrl,
-) async {
+  Uri authenticationUrl, {
+  Future<Uri> Function()? newExternalAuthentication,
+}) async {
   if (Platform.isAndroid) {
     final opened = await launchUrl(
       authenticationUrl,
@@ -35,14 +41,21 @@ Future<MfaAuthDialogResult?> showMfaAuthDialog(
   return showDialog<MfaAuthDialogResult>(
     context: context,
     barrierDismissible: false,
-    builder: (_) => _MfaAuthDialog(authenticationUrl: authenticationUrl),
+    builder: (_) => _MfaAuthDialog(
+      authenticationUrl: authenticationUrl,
+      newExternalAuthentication: newExternalAuthentication,
+    ),
   );
 }
 
 class _MfaAuthDialog extends StatefulWidget {
-  const _MfaAuthDialog({required this.authenticationUrl});
+  const _MfaAuthDialog({
+    required this.authenticationUrl,
+    this.newExternalAuthentication,
+  });
 
   final Uri authenticationUrl;
+  final Future<Uri> Function()? newExternalAuthentication;
 
   @override
   State<_MfaAuthDialog> createState() => _MfaAuthDialogState();
@@ -53,6 +66,7 @@ class _MfaAuthDialogState extends State<_MfaAuthDialog> {
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   bool _loading = true;
   String? _error;
+  bool _openingExternal = false;
 
   @override
   void initState() {
@@ -112,7 +126,29 @@ class _MfaAuthDialogState extends State<_MfaAuthDialog> {
         }),
       );
       _subscriptions.add(
-        controller.onLoadError.listen((_) {
+        controller.onLoadError.listen((status) async {
+          try {
+            if (!canDisplayRetryPage(status)) {
+              _setError('認証ページを読み込めませんでした。証明書とネットワークを確認してください。');
+              return;
+            }
+            final origin = jsonEncode(widget.authenticationUrl.origin);
+            final retryPage = await controller.executeScript(
+              'location.origin === $origin && '
+              'document.querySelector(\'[data-wgmfa-retry-page="true"]\') !== null',
+            );
+            if (retryPage == true) {
+              if (mounted) {
+                setState(() {
+                  _error = null;
+                  _loading = false;
+                });
+              }
+              return;
+            }
+          } catch (_) {
+            // An unreadable document still needs the normal error fallback.
+          }
           _setError('認証ページを読み込めませんでした。証明書とネットワークを確認してください。');
         }),
       );
@@ -181,16 +217,22 @@ class _MfaAuthDialogState extends State<_MfaAuthDialog> {
   }
 
   Future<void> _openExternalBrowser() async {
-    final opened = await launchUrl(
-      widget.authenticationUrl,
-      mode: LaunchMode.externalApplication,
-    );
-    if (!mounted) return;
-    if (!opened) {
-      _setError('既定ブラウザを開けませんでした。');
-      return;
+    if (_openingExternal) return;
+    setState(() => _openingExternal = true);
+    try {
+      final refresh = widget.newExternalAuthentication;
+      if (refresh == null) throw StateError('認証をキャンセルしてやり直してください。');
+      final uri = await refresh();
+      if (!mounted) return;
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!mounted) return;
+      if (!opened) throw StateError('既定ブラウザを開けませんでした。');
+      Navigator.of(context).pop(MfaAuthDialogResult.externalBrowser);
+    } catch (_) {
+      _setError('外部ブラウザへの切り替えに失敗しました。認証をキャンセルしてやり直してください。');
+    } finally {
+      if (mounted) setState(() => _openingExternal = false);
     }
-    Navigator.of(context).pop(MfaAuthDialogResult.externalBrowser);
   }
 
   @override
@@ -230,7 +272,7 @@ class _MfaAuthDialogState extends State<_MfaAuthDialog> {
                       ),
                     ),
                     TextButton.icon(
-                      onPressed: _openExternalBrowser,
+                      onPressed: _openingExternal ? null : _openExternalBrowser,
                       icon: const Icon(Icons.open_in_browser, size: 18),
                       label: const Text('外部ブラウザ'),
                     ),
@@ -248,7 +290,9 @@ class _MfaAuthDialogState extends State<_MfaAuthDialog> {
               Expanded(
                 child: Stack(
                   children: [
-                    if (controller != null && controller.value.isInitialized)
+                    if (_error == null &&
+                        controller != null &&
+                        controller.value.isInitialized)
                       Webview(
                         controller,
                         permissionRequested: (_, _, _) async =>
@@ -270,7 +314,9 @@ class _MfaAuthDialogState extends State<_MfaAuthDialog> {
                                 Text(_error!, textAlign: TextAlign.center),
                                 const SizedBox(height: 18),
                                 FilledButton.icon(
-                                  onPressed: _openExternalBrowser,
+                                  onPressed: _openingExternal
+                                      ? null
+                                      : _openExternalBrowser,
                                   icon: const Icon(Icons.open_in_browser),
                                   label: const Text('外部ブラウザで続ける'),
                                 ),

@@ -52,6 +52,34 @@ class VpnController extends ChangeNotifier {
   int _connectionEpoch = 0;
   MfaSession? _session;
   bool _cancelRequested = false;
+  bool _replacingAuthentication = false;
+
+  Future<Uri> replaceAuthenticationSession(AppSettings settings) async {
+    if (phase != ConnectionPhase.waitingForMfa ||
+        _cancelRequested ||
+        _replacingAuthentication) {
+      throw StateError('認証セッションを切り替えられません。');
+    }
+    final epoch = _connectionEpoch;
+    _replacingAuthentication = true;
+    try {
+      final device = await _deviceIdentityRepository.loadOrCreate();
+      final session = await _api.createSession(
+        Uri.parse(settings.serverUrl.trim()),
+        settings.peerUuid.trim(),
+        device,
+      );
+      if (_cancelRequested ||
+          epoch != _connectionEpoch ||
+          phase != ConnectionPhase.waitingForMfa) {
+        throw StateError('認証は終了しています。');
+      }
+      _session = session;
+      return session.browserUrl;
+    } finally {
+      _replacingAuthentication = false;
+    }
+  }
 
   bool get isBusy => switch (phase) {
     ConnectionPhase.waitingForMfa ||
@@ -141,8 +169,14 @@ class VpnController extends ChangeNotifier {
         if (_cancelRequested) {
           return;
         }
-        if (!canPollAuthentication) continue;
-        final state = await _api.getStatus(serverUri, _session!);
+        if (!canPollAuthentication || _replacingAuthentication) continue;
+        final polledSession = _session!;
+        final state = await _api.getStatus(serverUri, polledSession);
+        if (_cancelRequested ||
+            _replacingAuthentication ||
+            !identical(polledSession, _session)) {
+          continue;
+        }
         switch (state.status) {
           case MfaSessionStatus.pending:
           case MfaSessionStatus.authorizing:

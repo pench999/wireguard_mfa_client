@@ -16,8 +16,9 @@ bool isSameOrigin(Uri expected, Uri candidate) {
 
 Future<MfaAuthDialogResult?> showMfaAuthDialog(
   BuildContext context,
-  Uri authenticationUrl,
-) async {
+  Uri authenticationUrl, {
+  Future<Uri> Function()? newExternalAuthentication,
+}) async {
   final opened = await launchUrl(
     authenticationUrl,
     mode: LaunchMode.externalApplication,
